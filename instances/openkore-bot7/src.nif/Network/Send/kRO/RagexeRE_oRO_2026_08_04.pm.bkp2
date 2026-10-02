@@ -1,0 +1,205 @@
+#########################################################################
+# OpenKore - oRO protocol profile (experimental v3)
+# Base selected from packets confirmed in official-client captures:
+#   map_login     0944 (19 bytes)
+#   sync          0866 (6 bytes)
+#   character_move 0361 (5 bytes)
+#########################################################################
+package Network::Send::kRO::RagexeRE_oRO_2026_08_04;
+
+use strict;
+use warnings;
+
+use base qw(Network::Send::kRO::RagexeRE_2017_06_14b);
+use Utils qw(getTickCount);
+use Plugins;
+
+use Log qw(message warning error debug);
+
+sub new {
+	my ($class) = @_;
+	my $self = $class->SUPER::new(@_);
+
+	my %packets = (
+		'007D' => ['map_loaded'],
+		'014D' => ['guild_check'],
+		'014F' => ['guild_info_request', 'V', [qw(type)]],
+		'021D' => ['less_effect', 'V', [qw(flag)]],
+		'0447' => ['blocking_play_cancel'],
+		'0866' => ['sync', 'V', [qw(time)]],
+		'08C9' => ['request_cashitems'],
+		'0944' => ['map_login', 'a4 a4 a4 V C', [qw(accountID charID sessionID tick sex)]],
+	);
+	$self->{packet_list}{$_} = $packets{$_} for keys %packets;
+
+	my %handlers = qw(
+		map_loaded 007D
+		guild_check 014D
+		guild_info_request 014F
+		less_effect 021D
+		blocking_play_cancel 0447
+		sync 0866
+		request_cashitems 08C9
+		map_login 0944
+	);
+	$self->{packet_lut}{$_} = $handlers{$_} for keys %handlers;
+
+	$self->{oro_map_loaded_count} = 0;
+	$self->{oro_bootstrap_sent} = 0;
+
+	return $self;
+}
+
+sub _oro_send_raw {
+	my ($self, $label, $msg) = @_;
+	print "oRO SEND $label len=" . length($msg) . " hex=" . unpack('H*', $msg) . "\n";
+	$self->sendToServer($msg);
+}
+
+# Do not use reconstruct() here: this installation can truncate 0944
+# according to the external packet-length table.
+sub sendMapLogin {
+	my ($self, $accountID, $charID, $sessionID, $sex) = @_;
+	$sex = 0 if !defined($sex) || $sex < 0 || $sex > 1;
+
+	my $msg = pack(
+		'v a4 a4 a4 V C',
+		0x0944,
+		$accountID,
+		$charID,
+		$sessionID,
+		getTickCount(),
+		$sex
+	);
+
+	die "Invalid oRO map_login size: " . length($msg)
+		unless length($msg) == 19;
+
+	$self->_oro_send_raw('0944 map_login', $msg);
+}
+
+# The official client sends 021D immediately before each 007D.
+# On the second map-loaded notification it also sends a second 0866.
+sub sendMapLoaded {
+	my ($self) = @_;
+	$self->{oro_map_loaded_count}++;
+
+	$self->_oro_send_raw('021D less_effect(0)', pack('vV', 0x021D, 0));
+	$self->_oro_send_raw('007D map_loaded', pack('v', 0x007D));
+
+	if ($self->{oro_map_loaded_count} >= 2) {
+		$self->sendSync(1);
+	}
+}
+
+sub sendSync {
+	my ($self, $initialSync) = @_;
+	$self->_oro_send_raw('0866 sync', pack('vV', 0x0866, getTickCount()));
+}
+
+# Receive::map_loaded normally asks only for guild page 0. For oRO, the
+# official client capture shows this complete bootstrap sequence:
+# 08C9, 014D, 014F(0), 014F(4), 014F(0), 014F(1).
+sub sendGuildRequestInfo {
+	my ($self, $page) = @_;
+
+	if (!$self->{oro_bootstrap_sent}) {
+		$self->{oro_bootstrap_sent} = 1;
+		$self->_oro_send_raw('08C9 request_cashitems', pack('v', 0x08C9));
+		$self->_oro_send_raw('014D guild_check', pack('v', 0x014D));
+		for my $type (0, 4, 0, 1) {
+			$self->_oro_send_raw("014F guild_info_request($type)", pack('vV', 0x014F, $type));
+		}
+		return;
+	}
+
+	$self->_oro_send_raw("014F guild_info_request($page)", pack('vV', 0x014F, $page));
+}
+
+# Suppress the inherited automatic calls. The Receive profile sends one
+# 0447 only after the second server sync, matching the official capture.
+sub sendBlockingPlayerCancel {
+	return;
+}
+
+sub sendOROBlockingPlayerCancel {
+	my ($self) = @_;
+	$self->_oro_send_raw('0447 blocking_play_cancel', pack('v', 0x0447));
+}
+
+# The correct oRO opcodes for these requests are not confirmed. The v2
+# inherited/copied 0281 request was the final client packet before FIN.
+sub sendGetPlayerInfo {
+	my ($self, $ID) = @_;
+	print "oRO SUPPRESSED actor_info_request for ID=" . unpack('H*', $ID) . "\n";
+	return;
+}
+
+sub sendGetCharacterName {
+	my ($self, $ID) = @_;
+	print "oRO SUPPRESSED actor_name_request for ID=" . unpack('H*', $ID) . "\n";
+	return;
+}
+
+
+# Safe diagnostic/action sender for oRO.
+# Flags used by OpenKore: 0=attack once, 7=continuous attack,
+# 2=sit and 3=stand. Sit/stand remain suppressed until their official
+# oRO packet is confirmed. Attacks are sent only with a real 4-byte ID.
+sub sendAction {
+	my ($self, $targetID, $type) = @_;
+
+	$type = -1 unless defined $type;
+	my $defined = defined($targetID) ? 1 : 0;
+	my $length = $defined ? length($targetID) : -1;
+	my $hex = ($defined && $length > 0) ? unpack('H*', $targetID) : '<none>';
+
+	print "oRO sendAction type=$type target_defined=$defined target_len=$length target_hex=$hex\n";
+
+	my %args = (
+		monID => $targetID,
+		flag  => $type,
+	);
+
+	Plugins::callHook('packet_pre/sendAttack', \%args)
+		if $type == 0 || $type == 7;
+	Plugins::callHook('packet_pre/sendSit', \%args)
+		if $type == 2 || $type == 3;
+
+	if ($args{return}) {
+		$self->sendToServer($args{msg}) if defined $args{msg};
+		return;
+	}
+
+	$targetID = $args{monID};
+	$type = $args{flag};
+
+	# The repeated invalid calls seen with attackAuto 0 are most likely
+	# sit/stand requests. Do not send them until captured from the official client.
+	if ($type == 2 || $type == 3) {
+		print "oRO SUPPRESSED actor_action sit/stand type=$type until opcode is confirmed\n";
+		return;
+	}
+
+	unless ($type == 0 || $type == 7) {
+		print "oRO SUPPRESSED actor_action unknown type=$type\n";
+		return;
+	}
+
+	unless (defined($targetID) && length($targetID) == 4) {
+		my $bad_len = defined($targetID) ? length($targetID) : -1;
+		print "oRO SUPPRESSED actor_action attack: invalid target len=$bad_len\n";
+		return;
+	}
+
+	my $msg = pack('v a4 C', 0x083C, $targetID, $type);
+	die "Invalid oRO actor_action size: " . length($msg)
+		unless length($msg) == 7;
+
+	$self->_oro_send_raw(
+		"083C actor_action target=" . unpack('H*', $targetID) . " type=$type",
+		$msg
+	);
+}
+
+1;

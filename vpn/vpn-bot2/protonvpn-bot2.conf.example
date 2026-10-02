@@ -1,0 +1,13 @@
+# EXEMPLO SOMENTE. NÃO coloque chaves reais em arquivos compartilhados.
+# Renomeie/copie seu arquivo real para protonvpn-bot1.conf.
+# Para este setup Gluetun custom WireGuard, use endereço de interface IPv4.
+
+[Interface]
+PrivateKey = SUA_CHAVE_PRIVADA
+Address = 10.2.0.2/32
+
+[Peer]
+PublicKey = CHAVE_PUBLICA_DO_SERVIDOR
+Endpoint = IP_OU_HOST_DO_SERVIDOR:51820
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25

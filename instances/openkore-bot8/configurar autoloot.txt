@@ -1,0 +1,40 @@
+Crie ou edite:
+
+control\eventMacros.txt
+
+Coloque:
+
+automacro AtivarAutolootAoEntrar {
+    OnCharLogIn 1
+    timeout 30
+    exclusive 1
+
+    call {
+        pause 5
+        do c \@autoloot 100
+        log oRO: comando autoloot enviado
+    }
+}
+
+
+
+O OnCharLogIn 1 é acionado quando o personagem entra no jogo, e do executa um comando como se tivesse sido digitado no console. O pause 5 deixa o Map Server e os canais terminarem de carregar antes de enviar o chat.
+
+O caractere @ precisa ficar escapado:
+
+\@autoloot
+
+porque o eventMacro utiliza @ para variáveis.
+
+No arquivo:
+
+control\config.txt
+
+confirme ou adicione:
+
+eventMacro_file eventMacros.txt
+eventMacro_CheckOnAI auto, manual, off
+
+attackAuto 2		(ataque automatico ativado)
+itemsTakeAuto 0
+itemsGatherAuto 0

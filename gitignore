@@ -1,0 +1,5 @@
+# Segredos locais
+/.env
+/vpn/vpn-bot1/protonvpn-bot1.conf
+/vpn/vpn-bot2/protonvpn-bot2.conf
+/vpn/vpn-bot3/protonvpn-bot3.conf

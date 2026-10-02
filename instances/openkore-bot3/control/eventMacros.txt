@@ -1,0 +1,12 @@
+automacro AtivarAutolootAoEntrar {
+	OnCharLogIn 1
+	timeout 30
+	exclusive 1
+	overrideAI 1
+
+	call {
+		pause 1
+		do c \@autoloot 100
+		log ThanatosRO: comando autoloot enviado
+	}
+}

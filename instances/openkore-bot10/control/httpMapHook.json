@@ -1,0 +1,61 @@
+{
+  "enabled": true,
+
+  "start_delay_seconds": 0,
+  "interval_seconds": 120,
+
+  "timeout_seconds": 5,
+  "delay_ms": 120,
+
+  "bodies": [
+    {
+      "name": "body_01",
+      "body": "DB1377C5A18BEE5D37E41CCE0728C46E91A09B92F650CB6AE411719CFA0B0A54BF61DE4BE35BDB42303C18003A70A5F12B7F81A746EE44390C69CECAC3CCC8C2C3DDAEEF29"
+    },
+    {
+      "name": "body_02",
+      "body": "AE6E2C72D6BC99EB46F32DDD0829C76D90A19A93F753CE75EF040C799DED174340E15FCB62DD58DE53D1B5A585BBEE3B62B6F81FDF0077F6422300040D06020C09136439F2"
+    },
+    {
+      "name": "body_03",
+      "body": "B26A206ECAA085F7528FB2578F51FF1538C9B2AB8FF86482FC09090402000551B25CD542EC50CE57CB583C2C0E2C79ADF4216381BD66DD5F2A0B68ACE52F6BA5E03B0C41FA"
+    },
+    {
+      "name": "body_04",
+      "body": "32E9A1EF543E1B69C37190B2638CB852FD37007DD9B2AD54CE67AFDA3B4B4A94FF211E0A241B1B037FED56C6E4DACFDBC2D6D87FBF60D755200562A6EF197D97FE19623BFC"
+    },
+    {
+      "name": "body_05",
+      "body": "BC7CDEAC88E246341EDB0525D11331DA02330C0165CE4AE85BEB147195F51FBBD87AF76C82FD78FE73F1523A704E5B4F564244E01DC5B2AB9E87EC2960A9ED187DA7F0AD6F"
+    },
+    {
+      "name": "body_06",
+      "body": "0239115F3B1174C6A05E83A75E87A54FFE36017CD8B3AE55CF64ACD93C4A4B97FC261B0F3F3E383E34301404260411051C080A2EC061D656230261A5EC2662ACE934055891"
+    }
+  ],
+
+  "request1": {
+    "method": "POST",
+    "url": "http://206.0.29.192:9001/set-auth",
+    "headers": {
+      "Connection": "Keep-Alive",
+      "Content-Type": "text/plain",
+      "Accept": "application/json, text/plain; q=0.9, text/html;q=0.8,",
+      "Accept-Charset": "utf-8, *;q=0.8",
+      "User-Agent": "Embarcadero RESTClient/1.0",
+      "Token": "9F15802238684758AA4AAC5B3EA12417"
+    }
+  },
+
+  "request2": {
+    "method": "GET",
+    "url": "http://206.0.29.192:9001/get-auth-status",
+    "headers": {
+      "Connection": "Keep-Alive",
+      "Content-Type": "text/plain",
+      "Accept": "application/json, text/plain; q=0.9, text/html;q=0.8,",
+      "Accept-Charset": "utf-8, *;q=0.8",
+      "User-Agent": "Embarcadero RESTClient/1.0"
+    }
+  }
+}

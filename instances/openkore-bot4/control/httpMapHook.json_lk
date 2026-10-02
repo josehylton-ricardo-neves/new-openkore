@@ -1,0 +1,32 @@
+{
+  "enabled": true,
+  "timeout_seconds": 5,
+  "delay_ms": 120,
+
+  "request1": {
+    "method": "POST",
+    "url": "http://206.0.29.192:9001/set-auth",
+    "headers": {
+	  "Connection": "Keep-Alive",
+      "Content-Type": "text/plain",
+      "Accept": "application/json, text/plain; q=0.9, text/html;q=0.8,",
+	  "Accept-Charset": "utf-8, *;q=0.8",
+	  "User-Agent": "Embarcadero RESTClient/1.0",
+      "Token": "9F15802238684758AA4AAC5B3EA12417"
+    },
+    "body": "D30B4F1D79D3B684EE2CD574A24CF8123DF44ECFAB84FD76EC484895C11EB520658C85F16980AF4235C1A59595ABFE2B72A6E80F2FD7ACA194F17195FC1578898C96E7A660"
+  },
+
+  "request2": {
+    "method": "GET",
+    "url": "http://206.0.29.192:9001/get-auth-status",
+    "headers": {
+      "Connection": "Keep-Alive",
+      "Content-Type": "text/plain",
+      "Accept": "application/json, text/plain; q=0.9, text/html;q=0.8,",
+	  "Accept-Charset": "utf-8, *;q=0.8",
+	  "User-Agent": "Embarcadero RESTClient/1.0"
+    },
+    "body": "D30B4F1D79D3B684EE2CD574A24CF8123DF44ECFAB84FD76EC484895C11EB520658C85F16980AF4235C1A59595ABFE2B72A6E80F2FD7ACA194F17195FC1578898C96E7A660"
+  }
+}

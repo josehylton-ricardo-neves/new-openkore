@@ -1,0 +1,1104 @@
+name: openkore-bot-lab
+
+# ============================================================
+# OPENKORE - RUNTIME COMUM
+# ============================================================
+
+x-openkore-common: &openkore-common
+  image: openkore-runtime-gui:local
+
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: openkore-runtime
+
+  # Os scripts são bind-mounted e executados via /bin/sh.
+  # Isso evita problemas de permissão/CRLF vindos do Windows e
+  # permite alterar os scripts sem rebuild.
+  entrypoint:
+    - /usr/bin/tini
+    - --
+    - /bin/sh
+    - /usr/local/bin/openkore-entrypoint
+
+  restart: "no"
+
+  cap_drop:
+    - ALL
+
+  security_opt:
+    - no-new-privileges:true
+
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+  tmpfs:
+    - /tmp:size=256m,mode=1777
+
+
+x-bot-environment: &bot-environment
+  WAIT_FOR_VPN: "true"
+  VPN_CHECK_URL: "https://api.ipify.org"
+  VPN_WAIT_ATTEMPTS: "30"
+  VPN_WAIT_SECONDS: "2"
+  TERM: xterm
+  LANG: C.UTF-8
+  LC_ALL: C.UTF-8
+
+
+# ============================================================
+# GLUETUN - VPN COMUM
+# ============================================================
+
+x-vpn-common: &vpn-common
+  image: qmcgaw/gluetun:v3.41.1
+
+  # Wrapper local:
+  # 1. valida VPN/configs/credenciais;
+  # 2. só depois executa /gluetun-entrypoint.
+  entrypoint:
+    - /bin/sh
+    - /checks/vpn-guard-entrypoint.sh
+
+  cap_add:
+    - NET_ADMIN
+
+  devices:
+    - /dev/net/tun:/dev/net/tun
+
+  restart: unless-stopped
+
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+  # Torna explícito o healthcheck do Gluetun.
+  # O OpenKore usa depends_on: condition: service_healthy.
+  healthcheck:
+    test:
+      - CMD
+      - /gluetun-entrypoint
+      - healthcheck
+    interval: 5s
+    timeout: 5s
+    start_period: 10s
+    retries: 6
+
+
+x-vpn-environment: &vpn-environment
+  VPN_SERVICE_PROVIDER: custom
+  VPN_TYPE: wireguard
+  TZ: America/Fortaleza
+
+
+# ============================================================
+# VOLUMES COMUNS DOS BOTS
+# ============================================================
+
+x-bot1-volumes: &bot1-volumes
+  - type: bind
+    source: ./openkore-preflight.sh
+    target: /checks/openkore-preflight.sh
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./instances
+    target: /preflight-project/instances
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./vpn
+    target: /preflight-project/vpn
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./openkore-entrypoint.sh
+    target: /usr/local/bin/openkore-entrypoint
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./openkore-mode.sh
+    target: /usr/local/bin/openkore-mode
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./dockerMapState.pl
+    target: /opt/openkore/plugins/dockerMapState.pl
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./instances/openkore-bot1
+    target: /opt/openkore
+    bind:
+      create_host_path: false
+
+  - type: volume
+    source: xstools-bot1
+    target: /opt/openkore/src/auto/XSTools
+    volume:
+      nocopy: true
+
+
+  #----removendo logs de \openkore-bot\logs-------
+  #- type: bind
+  #  source: ./logs/log-bot1
+  #  target: /opt/openkore/logs
+  #  bind:
+  #    create_host_path: true
+
+  # ============================================================
+  # ONLINE GUARD
+  # ============================================================
+
+  - type: bind
+    source: ./runtime/online-watch
+    target: /shared/online-watch
+    read_only: true
+    bind:
+      create_host_path: true
+
+
+
+
+
+
+x-bot2-volumes: &bot2-volumes
+  - type: bind
+    source: ./openkore-preflight.sh
+    target: /checks/openkore-preflight.sh
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./instances
+    target: /preflight-project/instances
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./vpn
+    target: /preflight-project/vpn
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./openkore-entrypoint.sh
+    target: /usr/local/bin/openkore-entrypoint
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./openkore-mode.sh
+    target: /usr/local/bin/openkore-mode
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./dockerMapState.pl
+    target: /opt/openkore/plugins/dockerMapState.pl
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./instances/openkore-bot2
+    target: /opt/openkore
+    bind:
+      create_host_path: false
+
+  - type: volume
+    source: xstools-bot2
+    target: /opt/openkore/src/auto/XSTools
+    volume:
+      nocopy: true
+
+  #----removendo logs de \openkore-bot\logs-------
+  #- type: bind
+  #  source: ./logs/log-bot2
+  #  target: /opt/openkore/logs
+  #  bind:
+  #    create_host_path: true
+  
+  
+  
+  # ============================================================
+  # ONLINE GUARD
+  # ============================================================
+
+  - type: bind
+    source: ./runtime/online-watch
+    target: /shared/online-watch
+    read_only: true
+    bind:
+      create_host_path: true
+      
+      
+   
+   
+
+
+  
+x-bot3-volumes: &bot3-volumes
+  - type: bind
+    source: ./openkore-preflight.sh
+    target: /checks/openkore-preflight.sh
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./instances
+    target: /preflight-project/instances
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./vpn
+    target: /preflight-project/vpn
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./openkore-entrypoint.sh
+    target: /usr/local/bin/openkore-entrypoint
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./openkore-mode.sh
+    target: /usr/local/bin/openkore-mode
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./dockerMapState.pl
+    target: /opt/openkore/plugins/dockerMapState.pl
+    read_only: true
+    bind:
+      create_host_path: false
+
+  - type: bind
+    source: ./instances/openkore-bot3
+    target: /opt/openkore
+    bind:
+      create_host_path: false
+
+  - type: volume
+    source: xstools-bot3
+    target: /opt/openkore/src/auto/XSTools
+    volume:
+      nocopy: true
+
+
+
+  # ============================================================
+  # ONLINE GUARD
+  # ============================================================
+
+  - type: bind
+    source: ./runtime/online-watch
+    target: /shared/online-watch
+    read_only: true
+    bind:
+      create_host_path: true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# ============================================================
+# SERVIÇOS
+# ============================================================
+
+services:
+
+  # ==========================================================
+  # VPN 1
+  # ==========================================================
+  vpn1:
+    <<: *vpn-common
+
+    container_name: vpn-bot1
+    hostname: vpn-bot1
+
+    profiles:
+      - bot1-wx
+      - bot1-console
+      - bot1-map
+
+    environment:
+      <<: *vpn-environment
+      BOT_NUMBER: "1"
+      PREFLIGHT_ROOT: /project
+      FIREWALL_INPUT_PORTS: "6080,5900"
+
+    ports:
+      - "127.0.0.1:6080:6080"
+      - "127.0.0.1:6081:5900"
+
+    volumes:
+      # Guardas executados ANTES do Gluetun.
+      - type: bind
+        source: ./vpn-guard-entrypoint.sh
+        target: /checks/vpn-guard-entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./openkore-preflight.sh
+        target: /checks/openkore-preflight.sh
+        read_only: true
+        bind:
+          create_host_path: false
+
+      # Permite comparar BOT1 x BOT2 sem expor nada nos logs.
+      - type: bind
+        source: ./instances
+        target: /project/instances
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./vpn
+        target: /project/vpn
+        read_only: true
+        bind:
+          create_host_path: false
+
+      # Config WireGuard efetivamente usada pelo Gluetun.
+      - type: bind
+        source: ./vpn/vpn-bot1/protonvpn-bot1.conf
+        target: /gluetun/wireguard/wg0.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+    networks:
+      - vpn-bot1-net
+
+
+  # ==========================================================
+  # BOT1 - WX
+  # ==========================================================
+  bot1-gui:
+    <<: *openkore-common
+
+    container_name: openkore-bot1-gui
+
+    profiles:
+      - bot1-wx
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn1"
+
+    depends_on:
+      vpn1:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+      BOT_NAME: bot1
+      BOT_NUMBER: "1"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: wx
+
+      DISPLAY_NUM: "99"
+      SCREEN_WIDTH: "1280"
+      SCREEN_HEIGHT: "800"
+      SCREEN_DEPTH: "24"
+
+      VNC_PORT: "5900"
+      VNC_LISTEN: "0.0.0.0"
+      NOVNC_PORT: "6080"
+
+    volumes: *bot1-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - wx
+
+
+  # ==========================================================
+  # BOT1 - CONSOLE
+  # ==========================================================
+  bot1-console:
+    <<: *openkore-common
+
+    container_name: openkore-bot1-console
+
+    profiles:
+      - bot1-console
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn1"
+
+    depends_on:
+      vpn1:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+      BOT_NAME: bot1
+      BOT_NUMBER: "1"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: console
+
+    volumes: *bot1-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - console
+
+
+  # ==========================================================
+  # BOT1 - CONSOLE + MAPVIEWER
+  # ==========================================================
+  bot1-map:
+    <<: *openkore-common
+
+    container_name: openkore-bot1-map
+
+    profiles:
+      - bot1-map
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn1"
+
+    depends_on:
+      vpn1:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+      BOT_NAME: bot1
+      BOT_NUMBER: "1"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: map
+
+      DISPLAY_NUM: "99"
+      SCREEN_WIDTH: "1280"
+      SCREEN_HEIGHT: "800"
+      SCREEN_DEPTH: "24"
+
+      VNC_PORT: "5900"
+      VNC_LISTEN: "0.0.0.0"
+      NOVNC_PORT: "6080"
+
+    volumes: *bot1-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - map
+
+
+  # ==========================================================
+  # VPN 2
+  # ==========================================================
+  vpn2:
+    <<: *vpn-common
+
+    container_name: vpn-bot2
+    hostname: vpn-bot2
+
+    profiles:
+      - bot2-wx
+      - bot2-console
+      - bot2-map
+
+    environment:
+      <<: *vpn-environment
+      BOT_NUMBER: "2"
+      PREFLIGHT_ROOT: /project
+      FIREWALL_INPUT_PORTS: "6082,5902"
+
+    ports:
+      - "127.0.0.1:6082:6082"
+      - "127.0.0.1:6083:5902"
+
+    volumes:
+      - type: bind
+        source: ./vpn-guard-entrypoint.sh
+        target: /checks/vpn-guard-entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./openkore-preflight.sh
+        target: /checks/openkore-preflight.sh
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./instances
+        target: /project/instances
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./vpn
+        target: /project/vpn
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./vpn/vpn-bot2/protonvpn-bot2.conf
+        target: /gluetun/wireguard/wg0.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+    networks:
+      - vpn-bot2-net
+
+
+  # ==========================================================
+  # BOT2 - WX
+  # ==========================================================
+  bot2-gui:
+    <<: *openkore-common
+
+    container_name: openkore-bot2-gui
+
+    profiles:
+      - bot2-wx
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn2"
+
+    depends_on:
+      vpn2:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+      BOT_NAME: bot2
+      BOT_NUMBER: "2"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: wx
+
+      DISPLAY_NUM: "100"
+      SCREEN_WIDTH: "1280"
+      SCREEN_HEIGHT: "800"
+      SCREEN_DEPTH: "24"
+
+      VNC_PORT: "5902"
+      VNC_LISTEN: "0.0.0.0"
+      NOVNC_PORT: "6082"
+
+    volumes: *bot2-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - wx
+
+
+  # ==========================================================
+  # BOT2 - CONSOLE
+  # ==========================================================
+  bot2-console:
+    <<: *openkore-common
+
+    container_name: openkore-bot2-console
+
+    profiles:
+      - bot2-console
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn2"
+
+    depends_on:
+      vpn2:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+      BOT_NAME: bot2
+      BOT_NUMBER: "2"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: console
+
+    volumes: *bot2-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - console
+
+
+  # ==========================================================
+  # BOT2 - CONSOLE + MAPVIEWER
+  # ==========================================================
+  bot2-map:
+    <<: *openkore-common
+
+    container_name: openkore-bot2-map
+
+    profiles:
+      - bot2-map
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn2"
+
+    depends_on:
+      vpn2:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+      BOT_NAME: bot2
+      BOT_NUMBER: "2"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: map
+
+      DISPLAY_NUM: "100"
+      SCREEN_WIDTH: "1280"
+      SCREEN_HEIGHT: "800"
+      SCREEN_DEPTH: "24"
+
+      VNC_PORT: "5902"
+      VNC_LISTEN: "0.0.0.0"
+      NOVNC_PORT: "6082"
+
+    volumes: *bot2-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - map
+
+
+
+
+  # ==========================================================
+  # VPN 3
+  # ==========================================================
+  vpn3:
+    <<: *vpn-common
+
+    container_name: vpn-bot3
+    hostname: vpn-bot3
+
+    profiles:
+      - bot3-wx
+      - bot3-console
+      - bot3-map
+
+    environment:
+      <<: *vpn-environment
+      BOT_NUMBER: "3"
+      PREFLIGHT_ROOT: /project
+      FIREWALL_INPUT_PORTS: "6084,5904"
+
+    ports:
+      - "127.0.0.1:6084:6084"
+      - "127.0.0.1:6085:5904"
+
+    volumes:
+      - type: bind
+        source: ./vpn-guard-entrypoint.sh
+        target: /checks/vpn-guard-entrypoint.sh
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./openkore-preflight.sh
+        target: /checks/openkore-preflight.sh
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./instances
+        target: /project/instances
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./vpn
+        target: /project/vpn
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./vpn/vpn-bot3/protonvpn-bot3.conf
+        target: /gluetun/wireguard/wg0.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+    networks:
+      - vpn-bot3-net
+      
+      
+  # ==========================================================
+  # BOT3 - WX
+  # ==========================================================
+  bot3-gui:
+    <<: *openkore-common
+
+    container_name: openkore-bot3-gui
+
+    profiles:
+      - bot3-wx
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn3"
+
+    depends_on:
+      vpn3:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+
+      BOT_NAME: bot3
+      BOT_NUMBER: "3"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: wx
+
+      OK_MASTER: ${BOT3_MASTER:-oRO}
+      OK_USERNAME: ${BOT3_USERNAME:-}
+      OK_PASSWORD: ${BOT3_PASSWORD:-}
+      OK_CHAR: ${BOT3_CHAR:-}
+
+      DISPLAY_NUM: "101"
+      SCREEN_WIDTH: "1280"
+      SCREEN_HEIGHT: "800"
+      SCREEN_DEPTH: "24"
+
+      VNC_PORT: "5904"
+      VNC_LISTEN: "0.0.0.0"
+      NOVNC_PORT: "6084"
+
+    volumes: *bot3-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - wx
+      
+      
+
+  # ==========================================================
+  # BOT3 - CONSOLE
+  # ==========================================================
+  bot3-console:
+    <<: *openkore-common
+
+    container_name: openkore-bot3-console
+
+    profiles:
+      - bot3-console
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn3"
+
+    depends_on:
+      vpn3:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+
+      BOT_NAME: bot3
+      BOT_NUMBER: "3"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: console
+
+      OK_MASTER: ${BOT3_MASTER:-oRO}
+      OK_USERNAME: ${BOT3_USERNAME:-}
+      OK_PASSWORD: ${BOT3_PASSWORD:-}
+      OK_CHAR: ${BOT3_CHAR:-}
+
+    volumes: *bot3-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - console
+      
+      
+      
+    # ==========================================================
+  # BOT3 - CONSOLE + MAPVIEWER
+  # ==========================================================
+  bot3-map:
+    <<: *openkore-common
+
+    container_name: openkore-bot3-map
+
+    profiles:
+      - bot3-map
+
+    stdin_open: true
+    tty: true
+
+    network_mode: "service:vpn3"
+
+    depends_on:
+      vpn3:
+        condition: service_healthy
+
+    environment:
+      <<: *bot-environment
+
+      BOT_NAME: bot3
+      BOT_NUMBER: "3"
+      PREFLIGHT_ROOT: /preflight-project
+      OPENKORE_MODE: map
+
+      OK_MASTER: ${BOT3_MASTER:-oRO}
+      OK_USERNAME: ${BOT3_USERNAME:-}
+      OK_PASSWORD: ${BOT3_PASSWORD:-}
+      OK_CHAR: ${BOT3_CHAR:-}
+
+      DISPLAY_NUM: "101"
+      SCREEN_WIDTH: "1280"
+      SCREEN_HEIGHT: "800"
+      SCREEN_DEPTH: "24"
+
+      VNC_PORT: "5904"
+      VNC_LISTEN: "0.0.0.0"
+      NOVNC_PORT: "6084"
+
+    volumes: *bot3-volumes
+
+    command:
+      - /bin/sh
+      - /usr/local/bin/openkore-mode
+      - map
+
+
+
+
+
+
+
+  # ============================================================
+  # VPN EXCLUSIVA DO ONLINE WATCHER
+  # ============================================================
+
+  vpn-watcher:
+    image: qmcgaw/gluetun:v3.41.1
+
+    container_name: vpn-online-watcher
+    hostname: vpn-online-watcher
+
+    profiles:
+      - online-watcher
+
+    cap_add:
+      - NET_ADMIN
+
+    devices:
+      - /dev/net/tun:/dev/net/tun
+
+    restart: unless-stopped
+
+    environment:
+      VPN_SERVICE_PROVIDER: custom
+      VPN_TYPE: wireguard
+      TZ: America/Fortaleza
+
+    volumes:
+      - type: bind
+        source: ./vpn/vpn-watcher/protonvpn-watcher.conf
+        target: /gluetun/wireguard/wg0.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+    healthcheck:
+      test:
+        - CMD
+        - /gluetun-entrypoint
+        - healthcheck
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 6
+
+    networks:
+      - vpn-watcher-net
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "2"
+
+
+  # ============================================================
+  # ONLINE WATCHER
+  # ============================================================
+
+  online-watcher:
+    image: openkore-runtime-gui:local
+
+    container_name: openkore-online-watcher
+
+    profiles:
+      - online-watcher
+
+    restart: unless-stopped
+
+    network_mode: "service:vpn-watcher"
+
+    depends_on:
+      vpn-watcher:
+        condition: service_healthy
+
+    entrypoint:
+      - /usr/bin/tini
+      - --
+      - /usr/bin/perl
+      - /watcher/online-watcher.pl
+
+    environment:
+      ONLINE_WATCH_CONFIG: /watcher/online-watcher.conf
+
+    volumes:
+      - type: bind
+        source: ./online-guard/watcher/online-watcher.pl
+        target: /watcher/online-watcher.pl
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./online-guard/watcher/online-watcher.conf
+        target: /watcher/online-watcher.conf
+        read_only: true
+        bind:
+          create_host_path: false
+
+      - type: bind
+        source: ./runtime/online-watch
+        target: /shared/online-watch
+        bind:
+          create_host_path: true
+
+    cap_drop:
+      - ALL
+
+    security_opt:
+      - no-new-privileges:true
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "2m"
+        max-file: "2"
+
+
+
+
+
+
+
+
+
+
+  
+      
+
+# ============================================================
+# REDES
+# ============================================================
+
+networks:
+  vpn-bot1-net:
+    name: vpn-bot1-net
+    driver: bridge
+
+  vpn-bot2-net:
+    name: vpn-bot2-net
+    driver: bridge
+    
+  vpn-bot3-net:
+    name: vpn-bot3-net
+    driver: bridge
+
+
+  vpn-watcher-net:
+    name: vpn-watcher-net
+    driver: bridge
+
+# ============================================================
+# VOLUMES LINUX - XSTOOLS
+# ============================================================
+
+volumes:
+  xstools-bot1:
+    name: openkore-xstools-bot1
+
+  xstools-bot2:
+    name: openkore-xstools-bot2
+    
+  xstools-bot3:
+    name: openkore-xstools-bot3

@@ -1,0 +1,53 @@
+############################################
+# storageSellRoutine.pl
+############################################
+storageSellRoutine 1
+storageSellRoutine_onStart 1
+storageSellRoutine_cityMap alberta
+storageSellRoutine_goCommand @go alberta
+
+# Gatilhos em porcentagem.
+# 0 desativa aquele gatilho.
+storageSellRoutine_hp 10
+storageSellRoutine_sp 5
+
+# O peso NAO e duplicado aqui.
+# O plugin usa diretamente:
+# itemsMaxWeight_sellOrStore 48
+
+# Pequenos controles internos.
+storageSellRoutine_goSettle 1
+storageSellRoutine_queueGrace 3
+storageSellRoutine_cooldown 3
+
+############################################
+# Config nativo do OpenKore ja existente
+############################################
+# storageAuto_npc <SEU NPC DE STORAGE>
+# sellAuto_npc alberta_in 188 21
+# sellAuto_npc_steps s
+#
+# IMPORTANTE:
+# Os itens que vao para storage/venda continuam sendo definidos
+# normalmente no items_control.txt.
+
+############################################
+# albertaAfterService.pl
+############################################
+albertaAfterService 1
+albertaAfterService_cityMap alberta
+
+# PREENCHER com as coordenadas reais dos dois NPCs.
+albertaAfterService_healerNpc alberta X Y
+albertaAfterService_healerSteps c
+albertaAfterService_healerTimes 2
+albertaAfterService_healerDelay 1
+
+albertaAfterService_teleporterNpc alberta X Y
+
+# c = continua se houver tela intermediaria
+# r0 = escolhe a PRIMEIRA opcao do menu
+albertaAfterService_teleporterSteps c r0
+
+albertaAfterService_npcDistance 4
+albertaAfterService_timeout 30

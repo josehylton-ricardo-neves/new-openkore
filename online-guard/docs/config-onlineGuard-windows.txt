@@ -1,0 +1,18 @@
+# ============================================================
+# ONLINE GUARD - OpenKore rodando NATIVAMENTE no Windows
+# ============================================================
+
+onlineGuard 1
+
+# Mesmo arquivo fisico produzido pelo watcher Docker.
+onlineGuard_file C:/Users/jrneves/Documents/openkore/openkore-bot/runtime/online-watch/online_players.json
+
+onlineGuard_blacklist Fourmi, Fulano, Ciclano
+onlineGuard_checkInterval 2
+onlineGuard_staleAfter 70
+onlineGuard_startupGrace 90
+onlineGuard_clearDelay 1800
+onlineGuard_failClosed 1
+onlineGuard_disconnect 1
+onlineGuard_autoReconnect 1
+onlineGuard_caseSensitive 0

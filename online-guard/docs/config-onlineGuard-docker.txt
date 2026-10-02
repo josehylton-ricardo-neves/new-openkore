@@ -1,0 +1,38 @@
+# ============================================================
+# ONLINE GUARD - OpenKore rodando no Docker
+# Adicione ao control/config.txt de cada bot que deve usar o guard.
+# ============================================================
+
+onlineGuard 1
+
+onlineGuard_file /shared/online-watch/online_players.json
+
+# Nomes separados por virgula. Pode ser diferente em cada bot.
+onlineGuard_blacklist Fourmi, Fulano, Ciclano
+
+# O plugin faz apenas stat() neste intervalo.
+# O JSON so e aberto quando o arquivo muda.
+onlineGuard_checkInterval 2
+
+# Com watcher interval=20, 70s tolera algumas falhas.
+onlineGuard_staleAfter 70
+
+# Tolerancia inicial para o primeiro JSON valido aparecer.
+onlineGuard_startupGrace 90
+
+# 1800 segundos = 30 minutos.
+# Todos da blacklist precisam ficar ausentes continuamente por esse tempo.
+onlineGuard_clearDelay 1800
+
+# 1 = arquivo ausente/stale/invalido bloqueia/desconecta.
+onlineGuard_failClosed 1
+
+# 1 = desconecta quando houver blacklist ou watcher inseguro.
+onlineGuard_disconnect 1
+
+# 1 = reconecta automaticamente depois de liberar o bloqueio.
+onlineGuard_autoReconnect 1
+
+# 0 = ignora diferenca entre maiusculas/minusculas.
+# 1 = comparacao exata.
+onlineGuard_caseSensitive 0

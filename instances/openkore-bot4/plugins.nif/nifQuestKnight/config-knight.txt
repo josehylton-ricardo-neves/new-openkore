@@ -1,0 +1,121 @@
+###############################################################################
+# nifQuestKnight.pl
+# COLE NO config.txt DO KNIGHT
+###############################################################################
+
+nqKnight_enabled 1
+
+# Nome EXATO do Priest na mesma party:
+nqKnight_priestName NOME_DO_PRIEST
+
+# Os dois precisam ter o MESMO save point.
+# Ex.: geffen, prontera, payon...
+nqKnight_saveMap geffen
+saveMap geffen
+
+# Quest Loli Ruri
+nqKnight_questID 60176
+nqKnight_questResponse Loli Ruri
+
+# Deadman
+nqKnight_npcMap nif_fild01
+nqKnight_npcX 332
+nqKnight_npcY 327
+nqKnight_npcTalkDistance 5
+
+# Mapa de caca
+nqKnight_huntMap nif_fild02
+# Ponto proximo da entrada que vem de nif_fild01
+nqKnight_huntEntryX 25
+nqKnight_huntEntryY 310
+
+# O Warp Portal do Priest deve estar memorizado em Umbala
+nqKnight_warpMap umbala
+
+# O Knight PARA e espera se o Priest ficar para tras.
+nqKnight_travelLeash 8
+nqKnight_huntLeash 10
+
+# Fora de Umbala / Umbala Dungeon / Yggdrasil / Niflheim:
+# NUNCA calcula rota direta. Reune no save e usa Warp Portal para Umbala.
+nqKnight_forceUmbalaWarp 1
+
+# Seguranca na viagem.
+nqKnight_travelDefense 1
+nqKnight_travelOnlyAggressors 1
+nqKnight_travelAttackAuto 2
+nqKnight_dangerLogCooldown 2
+
+nqKnight_routeCooldown 1
+nqKnight_talkCooldown 4
+nqKnight_statusHeartbeat 20
+
+# Quando Priest morrer:
+nqKnight_butterflyCooldown 3
+nqKnight_portalEnterDelay 1.2
+
+###############################################################################
+# IMPORTANTE
+###############################################################################
+# O plugin controla attackAuto/lockMap/route_randomWalk/dcOnDeath.
+#
+# Para o Knight priorizar SOMENTE Loli Ruri, coloque no mon_control.txt:
+#
+# all 0 0 0
+# Loli Ruri 1 0 0
+#
+# Se quiser que ele se defenda de outros monstros agressivos, ajuste o
+# mon_control conforme sua preferencia.
+#
+# O plugin mantem dcOnDeath=-1 durante a rotina para o Knight esperar
+# Resurrection do Priest.
+###############################################################################
+
+
+# MUITO IMPORTANTE NO mon_control.txt:
+#
+# all 0 0 0
+# Loli Ruri 1 0 0
+#
+# Use 0, e nao -1.
+# 0 = ignora neutro, mas reage quando ele agride voce/party.
+# -1 = ignora inclusive se estiver atacando.
+
+
+# O plugin força isto em runtime para trocar alvo neutro por agressor real:
+attackChangeTarget 1
+
+
+###############################################################################
+# SINCRONIZACAO ENTRE PORTAIS v1.4
+###############################################################################
+nqKnight_mapSyncLogCooldown 3
+
+
+###############################################################################
+# v1.5 - NAO DEIXAR O OPENKORE TELEPORTAR POR IDLE
+###############################################################################
+# Opcional: o default interno ja e 1.
+nqKnight_blockIdleTeleport 1
+
+
+###############################################################################
+# v1.6 - BOOTSTRAP AUTOMATICO
+###############################################################################
+# Informativo: a logica e automatica e nao precisa desta chave.
+# Ao estar fora de Umbala/um_dun*/yggdrasil/nif_fild*, o Knight inicia
+# imediatamente o protocolo de Warp para Umbala.
+
+
+###############################################################################
+# v1.7 - YGGDRASIL EXPLICITO
+###############################################################################
+# Warp interno:
+# yggdrasil01 271,51 -> yggdrasil01 26,196
+nqKnight_yggInternalX 271
+nqKnight_yggInternalY 51
+
+# Saida:
+# yggdrasil01 249,262 -> nif_fild01 315,66
+nqKnight_yggExitX 249
+nqKnight_yggExitY 262

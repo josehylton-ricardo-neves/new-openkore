@@ -1,0 +1,48 @@
+OPENKORE DOCKER - MODOS
+=======================
+
+Use sempre a partir da raiz do projeto:
+C:\Users\jrneves\Documents\openkore\openkore-bot
+
+BOT1
+----
+okmode 1 wx
+  OpenKore Wx completo.
+  noVNC: http://localhost:6080
+  VNC:   127.0.0.1:6081
+
+okmode 1 console
+  OpenKore Console puro (perl openkore.pl).
+  O script abre o terminal com docker attach.
+
+okmode 1 map
+  OpenKore Console + mapview.pl.
+  Terminal: docker attach.
+  Mapa: noVNC/VNC.
+  O mapa é somente visualização nesta primeira versão.
+
+okmode 1 stop
+  Para OpenKore + VPN do bot1.
+
+okmode 1 status
+  Mostra os containers.
+
+BOT2
+----
+okmode 2 wx
+okmode 2 console
+okmode 2 map
+okmode 2 stop
+okmode 2 status
+
+IMPORTANTE
+----------
+Nunca rode wx + console + map do MESMO bot simultaneamente.
+O okmode para os outros modos antes de iniciar o escolhido.
+
+Os dois bots podem usar modos diferentes ao mesmo tempo, por exemplo:
+  bot1 = console
+  bot2 = wx
+
+Todos os modos usam a mesma imagem Docker.
+Não precisa build para trocar de modo.

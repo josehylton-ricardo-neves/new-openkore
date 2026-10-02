@@ -1,0 +1,1560 @@
+package nifQuestKnight;
+
+use strict;
+use warnings;
+
+use Time::HiRes qw(time);
+use Plugins;
+#use Globals qw(
+#    $char $field $accountID $playersList $npcsList $questList $messageSender
+#    %talk %config
+#);
+
+
+
+#======================================PROVOKE======================================================
+use Globals qw(
+    $char $field $accountID $playersList $monstersList $npcsList $questList $messageSender
+    %talk %config
+);
+#====================================================================================================
+
+
+use Log qw(message warning error);
+use AI;
+use Commands;
+
+use Skill;
+
+my $PLUGIN  = 'nifQuestKnight';
+my $VERSION = '8.2-portal-sync';
+
+# ============================================================
+# ESTADOS PRINCIPAIS
+# ============================================================
+# HUNT
+# QUEST_RETURN
+# QUEST_PICKUP
+# RECOVERY
+#
+# Cada estado possui UMA unica fase interna em $phase.
+# ============================================================
+
+my $state = 'HUNT';
+my $phase = 'RUN';
+
+my $peerQuest = 'unknown';
+my $peerQuestAt = 0;
+
+my $lastTick = 0;
+my $lastStatus = 0;
+my $lastStatusSig = '';
+my $lastRoute = 0;
+my $lastButterfly = 0;
+my $lastProtocolSend = 0;
+
+
+# Escape por HP baixo:
+# primeiro deixa teleportAuto fazer o teleport aleatorio;
+# somente depois permite Butterfly/RECOVERY.
+my $hpEscapePending = 0;
+my $hpEscapeTeleported = 0;
+my $hpEscapeStartedAt = 0;
+my $hpEscapeRestoreHp;
+
+#======================================PROVOKE=======================================================
+my $lastProvoke = 0;
+#====================================================================================================
+
+# Transporte/storage
+my $storageStarted = 0;
+my $storageCompleted = 0;
+
+# Transporte sincronizado simples.
+# Knight anuncia K_READY com mapa/posicao, recebe P_PORTAL real,
+# entra e informa K_MAP com o mapa real em que caiu.
+my $portalId=''; my $portalMode=''; my $portalX; my $portalY; my $portalAt=0; my $portalRouteStartedAt=0;
+my $lastMapReport=0; my $portalEnterStartedAt=0;
+my $pArrivedId=''; my $pArrivedMode=''; my $pArrivedMap='';
+
+# Morte/recovery
+my $deadSince = 0;
+my $lastDeadSend = 0;
+my $priestDiedAt = 0;
+
+# Patrol
+my $patrolIndex = 0;
+my $lastPatrolRoute = 0;
+
+my $lastKPosSend = 0;
+
+# Deadman
+my $deadmanActive = 0;
+my $deadmanMode = '';
+my $deadmanStage = 0;
+my $deadmanStartedAt = 0;
+my $lastDeadmanTalk = 0;
+
+my %savedConfig;
+my $configApplied = 0;
+
+Plugins::register(
+    $PLUGIN,
+    'Niflheim Knight simples: HUNT/QUEST_RETURN/QUEST_PICKUP/RECOVERY',
+    \&onUnload
+);
+
+my $hooks = Plugins::addHooks(
+    ['AI_pre',                    \&onAIPre],
+    ['AI_post',                   \&onAI],
+    ['packet_partyMsg',           \&onPartyMsg],
+	['Network::Receive::map_changed',\&onMapChanged],
+    ['packet/npc_talk_continue',  \&onDeadmanTalkContinue],
+    ['npc_talk_responses',        \&onDeadmanTalkResponses],
+    ['npc_talk_done',             \&onDeadmanTalkDone],
+    ['AI_storage_auto_completed', \&onStorageCompleted],
+);
+
+my $commands = Commands::register(
+    ['nqk', 'nifQuestKnight simple', \&cmdNQK]
+);
+
+message("[nifQuestKnight] CARREGADO v$VERSION\n", 'success');
+
+# ------------------------------------------------------------
+# CONFIG / HELPERS
+# ------------------------------------------------------------
+
+sub cfg {
+    my ($key, $default) = @_;
+    return $default if !exists $config{$key};
+    return $default if !defined $config{$key};
+    return $default if $config{$key} eq '';
+    return $config{$key};
+}
+
+sub enabled {
+    return cfg('nqKnight_enabled', 1) ? 1 : 0;
+}
+
+sub normalizeMap {
+    my ($m) = @_;
+    $m //= '';
+    $m =~ s/\.gat$//i;
+    return $m;
+}
+
+sub currentMap {
+    return '' unless $field;
+    return normalizeMap($field->baseName);
+}
+
+sub saveMap { return normalizeMap(cfg('nqKnight_saveMap', 'geffen')); }
+sub npcMap  { return normalizeMap(cfg('nqKnight_npcMap', 'nif_fild01')); }
+sub huntMap { return normalizeMap(cfg('nqKnight_huntMap', 'nif_fild02')); }
+sub questID { return int(cfg('nqKnight_questID', 60176)); }
+
+sub questStatus {
+    my $id = questID();
+    return 'inactive' unless $questList && exists $questList->{$id};
+
+    my $q = $questList->{$id};
+    return 'inactive' unless $q && $q->{active};
+
+    my $missions = $q->{missions} || {};
+    for my $m (values %$missions) {
+        next unless $m;
+        my $goal  = $m->{mob_goal}  || 0;
+        my $count = $m->{mob_count} || 0;
+
+        if ($goal > 0) {
+            return 'incomplete' if $count < $goal;
+        } else {
+            return 'incomplete' if $count == 0;
+        }
+    }
+
+    return 'complete';
+}
+
+sub peerQuest {
+    my $ttl = cfg('nqKnight_peerStatusTTL', 15);
+    return 'unknown' if !$peerQuestAt || (time - $peerQuestAt) > $ttl;
+    return $peerQuest;
+}
+
+sub inNiflheimCorridor {
+    my $m = currentMap();
+    return 1 if $m eq npcMap();
+    return 1 if $m eq huntMap();
+    return 1 if $m eq 'yggdrasil01';
+    return 1 if $m eq 'um_dun01';
+    return 1 if $m eq 'um_dun02';
+    return 0;
+}
+
+sub pairDesiredState {
+    my $own  = questStatus();
+    my $peer = peerQuest();
+    return '' if $peer eq 'unknown';
+
+    return 'QUEST_RETURN'
+        if $own eq 'complete' && $peer eq 'complete';
+
+    return 'QUEST_PICKUP'
+        if $own eq 'inactive' || $peer eq 'inactive';
+
+    return 'NORMAL';
+}
+
+sub partyMemberByName {
+    my ($wanted) = @_;
+    return unless $char && $char->{party} && $char->{party}{users};
+    return unless defined $wanted && $wanted ne '';
+
+    for my $ID (keys %{$char->{party}{users}}) {
+        next if defined $accountID && $ID eq $accountID;
+        my $m = $char->{party}{users}{$ID};
+        next unless $m && defined $m->{name};
+        return ($ID, $m) if lc($m->{name}) eq lc($wanted);
+    }
+
+    return;
+}
+
+sub priestMember {
+    return partyMemberByName(cfg('nqKnight_priestName', 'Curador'));
+}
+
+sub memberMap {
+    my ($m) = @_;
+    return '' unless $m;
+    return normalizeMap($m->{map});
+}
+
+#sub memberPos {
+#    my ($m) = @_;
+#    return unless $m && $m->{pos};
+#    return unless defined $m->{pos}{x} && defined $m->{pos}{y};
+#    return if $m->{pos}{x} >= 65535 || $m->{pos}{y} >= 65535;
+#    return {x => $m->{pos}{x}, y => $m->{pos}{y}};
+#}
+
+
+sub memberPos {
+    my ($m) = @_;
+    return unless $m;
+
+    # 1) Primeiro tenta a posicao recebida pela estrutura da party.
+    if ($m->{pos}
+        && defined $m->{pos}{x}
+        && defined $m->{pos}{y}
+        && $m->{pos}{x} < 65535
+        && $m->{pos}{y} < 65535) {
+
+        return {
+            x => $m->{pos}{x},
+            y => $m->{pos}{y}
+        };
+    }
+
+    # 2) Fallback: se o membro estiver visivel na tela,
+    # usa a posicao REAL do Actor em playersList.
+    if ($playersList && defined $m->{name} && $m->{name} ne '') {
+        for my $a (@{$playersList->getItems()}) {
+            next unless $a;
+            next unless defined $a->{name};
+            next unless lc($a->{name}) eq lc($m->{name});
+
+            my $p = $a->{pos_to} || $a->{pos};
+            next unless $p;
+            next unless defined $p->{x} && defined $p->{y};
+            next if $p->{x} >= 65535 || $p->{y} >= 65535;
+
+            return {
+                x => $p->{x},
+                y => $p->{y}
+            };
+        }
+    }
+
+    return;
+}
+
+sub memberDead {
+    my ($ID, $m) = @_;
+    return 0 unless $m;
+
+    if ($playersList) {
+        my $a = $playersList->getByID($ID);
+        return 1 if $a && $a->{dead};
+    }
+
+    return 1 if $m->{dead};
+    return 1 if defined $m->{hp} && defined $m->{hp_max}
+             && $m->{hp_max} > 0 && $m->{hp} <= 0;
+    return 0;
+}
+
+sub blockDist {
+    my ($a, $b) = @_;
+    return 99999 unless $a && $b;
+    my $dx = abs(($a->{x} // 0) - ($b->{x} // 0));
+    my $dy = abs(($a->{y} // 0) - ($b->{y} // 0));
+    return $dx > $dy ? $dx : $dy;
+}
+
+sub sendParty {
+    my ($msg) = @_;
+    return unless $char && $char->{party};
+    Commands::run("p [NQ] $msg");
+}
+
+sub broadcastStatus {
+    my ($force) = @_;
+    my $sig = join('|', questStatus(), $state, $phase, currentMap());
+    my $hb = cfg('nqKnight_statusHeartbeat', 5);
+
+    return if !$force && $sig eq $lastStatusSig
+        && (time - $lastStatus) < $hb;
+
+    sendParty("STATUS K " . questStatus());
+    $lastStatusSig = $sig;
+    $lastStatus = time;
+}
+
+sub saveConfig {
+    my ($key) = @_;
+    return if exists $savedConfig{$key};
+    $savedConfig{$key} = exists $config{$key} ? $config{$key} : undef;
+}
+
+sub setConfig {
+    my ($key, $value) = @_;
+    saveConfig($key);
+    $config{$key} = $value;
+}
+
+sub applyBaseConfig {
+    return if $configApplied;
+
+    setConfig('follow', 0);
+    setConfig('route_randomWalk', 0);
+    setConfig('teleportAuto_minAggressives', 0);
+	
+	
+	# Nao teleportar simplesmente porque perdeu/abandonou um alvo.
+    setConfig('teleportAuto_dropTarget', 0);
+    setConfig('teleportAuto_dropTargetEngaged', 0);
+    setConfig('teleportAuto_lostTarget', 0);
+	
+
+    # Knight e o tanque da dupla.
+    # Combate fica ativo em HUNT, nif_fild01 e deslocamentos.
+    setConfig('attackAuto', 2);
+
+    for my $k (qw(
+        sitAuto_hp_lower sitAuto_hp_upper sitAuto_sp_lower sitAuto_sp_upper
+        sitAuto_follow sitAuto_over_50 sitAuto_idle sitTensionRelax followSitAuto
+    )) {
+        setConfig($k, 0);
+    }
+
+    $configApplied = 1;
+}
+
+sub restoreConfig {
+    for my $k (keys %savedConfig) {
+        if (defined $savedConfig{$k}) {
+            $config{$k} = $savedConfig{$k};
+        } else {
+            delete $config{$k};
+        }
+    }
+    %savedConfig = ();
+}
+
+sub coreBusy {
+    return AI::inQueue(
+        'NPC', 'storageAuto', 'transferItems', 'sellAuto', 'buyAuto'
+    ) ? 1 : 0;
+}
+
+sub setHuntMode {
+    $config{attackAuto} = 2;
+}
+
+sub setTravelMode {
+    # Nunca desliga combate durante deslocamento.
+    # O Knight deve limpar monstros no caminho em vez de arrasta-los.
+    $config{attackAuto} = 2;
+}
+
+sub clearForwardMovement {
+    # O leash cancela SOMENTE deslocamento.
+    # Nunca limpa 'attack', portanto o Knight termina a luta atual.
+    AI::clear(qw(route mapRoute move));
+}
+
+sub leashState {
+    my ($pm) = @_;
+    return ('MISSING', undef) unless $pm;
+
+    my $pmap = memberMap($pm);
+    return ('OTHER_MAP', undef)
+        if $pmap ne '' && $pmap ne currentMap();
+
+    my $pp = memberPos($pm);
+    return ('MISSING', undef) unless $pp;
+
+    my $me = $char->{pos_to} || $char->{pos};
+    my $dist = blockDist($me, $pp);
+
+    my $soft = int(cfg('nqKnight_leashSoft', 8));
+    my $hard = int(cfg('nqKnight_leashHard', 12));
+    $hard = $soft + 1 if $hard <= $soft;
+
+    return ('NEAR', $dist) if $dist <= $soft;
+    return ('SOFT', $dist) if $dist <= $hard;
+    return ('FAR',  $dist);
+}
+
+sub enforcePriestLeash {
+    my ($pm) = @_;
+    my ($ls, $dist) = leashState($pm);
+
+    # Priest perto: avanco normal para o setor.
+    return 0 if $ls eq 'NEAR';
+
+    # Priest ficou no mapa anterior.
+    # Para a rota para frente imediatamente, mas attackAuto continua 2.
+    if ($ls eq 'OTHER_MAP') {
+        clearForwardMovement() if AI::inQueue('route', 'mapRoute', 'move');
+        return 1;
+    }
+
+    # 9..12 celulas: nao abre mais distancia.
+    # Para somente o deslocamento e continua matando o que aparecer.
+    if ($ls eq 'SOFT') {
+        clearForwardMovement() if AI::inQueue('route', 'mapRoute', 'move');
+        return 1;
+    }
+
+    # >12: o Knight ja abriu distancia demais.
+    # Cancela a rota para frente, termina a luta atual e volta
+    # em direcao ao Priest MATANDO no caminho.
+    if ($ls eq 'FAR') {
+        clearForwardMovement() if AI::inQueue('route', 'mapRoute', 'move');
+
+        # Nao interrompe combate em andamento.
+        return 1 if AI::inQueue('attack');
+
+        my $pp = memberPos($pm);
+        if ($pp) {
+            routeTo(
+                currentMap(),
+                $pp->{x}, $pp->{y},
+                int(cfg('nqKnight_leashSoft', 8)),
+                2
+            );
+        }
+        return 1;
+    }
+
+    # Sem posicao confiavel: nao avanca cegamente.
+    clearForwardMovement() if AI::inQueue('route', 'mapRoute', 'move');
+    return 1;
+}
+
+sub routeTo {
+    my ($map, $x, $y, $dist, $attackOnRoute) = @_;
+    $dist = 3 unless defined $dist;
+    $attackOnRoute = 0 unless defined $attackOnRoute;
+
+    return if coreBusy();
+    return if AI::inQueue('route', 'mapRoute', 'move');
+    return if (time - $lastRoute) < cfg('nqKnight_routeCooldown', 0.7);
+
+    ai_route(
+        $map, $x, $y,
+        attackOnRoute => $attackOnRoute,
+        noSitAuto => 1,
+        distFromGoal => $dist,
+        isRandomWalk => 0,
+    );
+
+    $lastRoute = time;
+}
+
+sub setState {
+    my ($new, $newPhase, $why) = @_;
+    $newPhase //= 'RUN';
+
+    return if $state eq $new && $phase eq $newPhase;
+
+    message(
+        "[nifQuestKnight] STATE $state/$phase -> $new/$newPhase"
+        . (defined $why && $why ne '' ? " ($why)" : '')
+        . "\n",
+        'success'
+    );
+
+    $state = $new;
+    $phase = $newPhase;
+
+    if ($new eq 'QUEST_RETURN' || $new eq 'QUEST_PICKUP' || $new eq 'RECOVERY') {
+        resetTransport();
+    }
+
+    resetDeadman() if $new ne 'QUEST_RETURN' && $new ne 'QUEST_PICKUP';
+}
+
+sub resumeNormal {
+	
+	# Se o HP emergency desligou teleportAuto_hp temporariamente,
+    # reativa quando o ciclo terminou e a dupla vai voltar a caca.
+    if (defined $hpEscapeRestoreHp) {
+        $config{teleportAuto_hp} = $hpEscapeRestoreHp;
+
+        message(
+            "[nifQuestKnight] HP EMERGENCIA: teleportAuto_hp restaurado para "
+            . $hpEscapeRestoreHp
+            . "%.\n",
+            'success'
+        );
+
+        undef $hpEscapeRestoreHp;
+    }
+	
+	
+    my $desired = pairDesiredState();
+
+    if ($desired eq 'QUEST_RETURN') {
+        setState('QUEST_RETURN', currentMap() eq npcMap() ? 'GO_DEADMAN' : 'GO_HOME', 'ambos complete');
+        return;
+    }
+
+    if ($desired eq 'QUEST_PICKUP') {
+        setState('QUEST_PICKUP', currentMap() eq npcMap() ? 'GO_DEADMAN' : 'GO_HOME', 'quest precisa sincronizar');
+        return;
+    }
+
+    setState('HUNT', 'RUN', 'dupla pronta para caçar');
+}
+
+# ------------------------------------------------------------
+# SINCRONIZACAO DO TRANSPORTE
+# ------------------------------------------------------------
+sub syncRetrySeconds { return cfg('nqKnight_syncRetry',2); }
+sub transportTimeout { return cfg('nqKnight_transportSyncTimeout',18); }
+sub resetPortalInfo {
+    $portalId=''; $portalMode=''; undef $portalX; undef $portalY; $portalAt=0; $portalRouteStartedAt=0;
+    $portalEnterStartedAt=0; $lastMapReport=0; $pArrivedId=''; $pArrivedMode=''; $pArrivedMap='';
+}
+sub sendReady {
+    my ($mode)=@_; my $pos=$char->{pos_to}||$char->{pos}; return unless $pos;
+    sendParty("K_READY $mode ".currentMap()." $pos->{x} $pos->{y}");
+}
+#sub sendCurrentMap {
+#    my ($mode)=@_; return unless $portalId ne ''; my $pos=$char->{pos_to}||$char->{pos}; return unless $pos;
+#    sendParty("K_MAP $portalId $mode ".currentMap()." $pos->{x} $pos->{y}"); $lastMapReport=time;
+#}
+
+
+
+sub sendCurrentMap {
+    my ($mode) = @_;
+
+    return 0 unless $portalId ne '';
+
+    my $pos = $char->{pos_to} || $char->{pos};
+    return 0 unless $pos;
+    return 0 unless defined $pos->{x} && defined $pos->{y};
+
+    sendParty(
+        "K_MAP $portalId $mode "
+        . currentMap()
+        . " $pos->{x} $pos->{y}"
+    );
+
+    $lastMapReport = time;
+    return 1;
+}
+
+
+
+sub sendHuntPosition {
+    return unless $char && $field;
+
+    my $pos = $char->{pos_to} || $char->{pos};
+    return unless $pos;
+
+    my $interval = cfg('nqKnight_huntPosHeartbeat', 2);
+
+    return if $lastKPosSend
+        && (time - $lastKPosSend) < $interval;
+
+    sendParty(
+        "K_POS "
+        . currentMap()
+        . " "
+        . $pos->{x}
+        . " "
+        . $pos->{y}
+    );
+
+    $lastKPosSend = time;
+}
+
+
+
+
+
+
+# ------------------------------------------------------------
+# EVENTOS: SOMENTE REGISTRAM
+# ------------------------------------------------------------
+
+sub onPartyMsg {
+    my (undef,$args)=@_; return unless enabled() && $args;
+    my $msg=$args->{Msg}//$args->{message}//''; my $user=$args->{MsgUser}//$args->{user}//'';
+    return unless $msg =~ /^\[NQ\]\s+(.+)/i;
+    my $expected=cfg('nqKnight_priestName','Curador'); return if $expected ne '' && $user ne '' && lc($user) ne lc($expected);
+    my $m=$1;
+    if ($m =~ /^STATUS\s+P\s+(inactive|incomplete|complete)$/i) { $peerQuest=lc($1); $peerQuestAt=time; return; }
+    if ($m =~ /^P_PORTAL\s+(\S+)\s+(QUEST_RETURN|QUEST_PICKUP|RECOVERY)\s+(\d+)\s+(\d+)$/i) {
+        my ($id,$mode,$x,$y)=($1,uc($2),int($3),int($4));
+        my $isNew=($portalId ne $id)||!defined($portalX)||!defined($portalY)||$portalX!=$x||$portalY!=$y;
+        if ($isNew) {
+            $portalId=$id; $portalMode=$mode; $portalX=$x; $portalY=$y; $portalAt=time; $portalEnterStartedAt=time; $portalRouteStartedAt=0; $lastMapReport=0;
+            clearForwardMovement() if AI::inQueue('route','mapRoute','move'); $lastRoute=0;
+            if ($state eq $mode) { $phase='ENTER_PORTAL'; }
+            message("[nifQuestKnight] PORTAL DISPONIVEL: id=$portalId mode=$portalMode coord=$portalX,$portalY.\n",'success');
+        } else { $portalAt=time; }
+        return;
+    }
+    if ($m =~ /^P_ARRIVED\s+(\S+)\s+(QUEST_RETURN|QUEST_PICKUP|RECOVERY)\s+(\S+)$/i) {
+        $pArrivedId=$1; $pArrivedMode=uc($2); $pArrivedMap=normalizeMap($3); return;
+    }
+    
+	#if ($m =~ /^P_DIED$/i) { $priestDiedAt=time; return; }
+	
+	
+	if ($m =~ /^P_DIED$/i) {
+    $priestDiedAt = time;
+
+    # Confirma imediatamente que o Knight recebeu a morte.
+    # Nao espera storage nem K_READY.
+    sendParty('K_ACK_P_DIED');
+
+    return;
+	}
+	
+	
+}
+
+sub onStorageCompleted {
+    return unless enabled();
+    return unless $state eq 'QUEST_RETURN'
+               || $state eq 'QUEST_PICKUP'
+               || $state eq 'RECOVERY';
+
+    $storageCompleted = 1;
+    message("[nifQuestKnight] STORAGE: AI_storage_auto_completed recebido.\n", 'success');
+}
+
+# ------------------------------------------------------------
+# HUNT
+# ------------------------------------------------------------
+
+sub aggressiveCount {
+    my @ids;
+    my $ok = eval { @ids = AI::ai_getAggressives(0, 1); 1; };
+    return 0 unless $ok;
+    return scalar @ids;
+}
+
+
+
+
+
+
+
+
+
+
+
+sub protectPriest {
+    my ($PID, $pm) = @_;
+
+    return 0 unless $PID && $pm;
+    return 0 if memberDead($PID, $pm);
+
+    # So funciona se os dois estiverem no mesmo mapa.
+    my $pmap = memberMap($pm);
+    return 0 if $pmap ne '' && $pmap ne currentMap();
+
+    # Se ja esta atacando alguma coisa, nao interrompe a luta atual.
+    return 0 if AI::inQueue('attack');
+
+    my @attackers;
+
+    my $ok = eval {
+        @attackers = AI::ai_getMonstersAttacking($PID);
+        1;
+    };
+
+    return 0 unless $ok;
+    return 0 unless @attackers;
+
+    my $me = $char->{pos_to} || $char->{pos};
+    return 0 unless $me;
+
+    my $maxDist = int(
+        cfg('nqKnight_protectPriestDistance', 20)
+    );
+
+    my $bestID;
+    my $bestMonster;
+    my $bestDist;
+
+    for my $ID (@attackers) {
+        next unless $ID;
+
+        my $monster = $monstersList
+            ? $monstersList->getByID($ID)
+            : undef;
+
+        next unless $monster;
+
+        my $mp = $monster->{pos_to} || $monster->{pos};
+        next unless $mp;
+
+        my $dist = blockDist($me, $mp);
+
+        next if $dist > $maxDist;
+
+        if (!defined $bestDist || $dist < $bestDist) {
+            $bestID = $ID;
+            $bestMonster = $monster;
+            $bestDist = $dist;
+        }
+    }
+
+    return 0 unless $bestID;
+
+    # Defender o Priest tem prioridade sobre patrol/leash.
+    AI::clear(qw(route mapRoute move));
+
+    message(
+        "[nifQuestKnight] PROTECT: "
+        . ($bestMonster->{name} || 'Monster')
+        . " esta atacando "
+        . cfg('nqKnight_priestName', 'Curador')
+        . " -> atacando agora"
+        . " (dist=$bestDist).\n",
+        'warning'
+    );
+
+    AI::attack($bestID);
+
+    return 1;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#sub patrolPoints {
+#    return (
+#        [167,234], [68,278], [55,150], [45,78],
+#        [62,65], [116,127], [133,158], [167,234],
+#        [288,213], [322,174], [349,129], [349,235],
+#        [370,272], [340,296], [351,282], [288,213],
+#    );
+#}
+
+
+sub patrolPoints {
+    # Patrulha para Disguise em nif_fild01
+    return (
+        [328,318],
+        [300,285],
+        [270,250],
+        [235,225],
+        [200,200],
+        [165,185],
+        [130,205],
+        [100,235],
+        [75,270],
+        [100,305],
+        [145,315],
+        [190,295],
+        [235,275],
+        [280,290],
+        [320,310],
+    );
+}
+
+
+
+sub processHunt {
+    setHuntMode();
+
+    if (!inNiflheimCorridor()) {
+        setState('RECOVERY', 'GO_HOME', 'HUNT fora do corredor de Niflheim');
+        return;
+    }
+
+    my ($PID, $pm) = priestMember();
+
+    if ($pm && memberDead($PID, $pm)) {
+        setState('RECOVERY', 'GO_HOME', 'Priest morreu');
+        return;
+    }
+	
+	
+	
+	
+	# Fallback forte:
+	# se o Priest estava conosco na caca e agora aparece no SAVE,
+	# ele morreu/respawnou ou voltou para casa.
+	# Em qualquer dos dois casos o Knight deve reagrupar.
+	if ($pm) {
+		my $pmap = memberMap($pm);
+
+		if ($pmap eq saveMap()
+			&& currentMap() ne saveMap()) {
+
+			setState(
+				'RECOVERY',
+				'GO_HOME',
+				'Priest voltou ao save'
+			);
+
+			return;
+		}
+	}
+	
+	
+	
+
+    my $desired = pairDesiredState();
+
+    if ($desired eq 'QUEST_RETURN') {
+        setState('QUEST_RETURN', 'GO_HOME', 'ambos complete');
+        return;
+    }
+
+    if ($desired eq 'QUEST_PICKUP') {
+        setState('QUEST_PICKUP', currentMap() eq npcMap() ? 'GO_DEADMAN' : 'GO_HOME', 'quest fora de sincronia');
+        return;
+    }
+
+    if (aggressiveCount() >= int(cfg('nqKnight_emergencyAggressives', 6))) {
+        setState('RECOVERY', 'GO_HOME', 'muitos agressivos');
+        return;
+    }
+	
+	#======================================PROVOKE======================================================
+	# Protecao ativa do Priest.
+	# Se algum monstro estiver atacando o Priest,
+	# tenta puxar o aggro com Provoke.
+	#return if protectPriestWithProvoke($PID, $pm);
+	#===================================================================================================
+
+    # Primeiro chega ao mapa de caça.
+    if (currentMap() ne huntMap()) {
+        setTravelMode();
+        #routeTo(huntMap(), 68, 278, 6, 2);
+		routeTo(huntMap(), 328, 318, 6, 2);
+        return;
+    }
+	
+	
+	# Durante a caca, informa periodicamente onde o Knight esta.
+	# Isto NAO faz parte da sincronizacao do Warp Portal.
+	sendHuntPosition();
+	
+	
+	# ------------------------------------------------------------
+	# PROTECAO DO PRIEST TEM PRIORIDADE SOBRE LEASH/PATROL
+	# ------------------------------------------------------------
+	if ($pm && !memberDead($PID, $pm)) {
+		return if protectPriest($PID, $pm);
+	}
+
+	
+
+    # Leash ativo: Knight lidera, mas nao abandona o Priest.
+    # A rota para frente e interrompida assim que o Priest fica para tras;
+    # o combate permanece ativo o tempo inteiro.
+    if ($pm && !memberDead($PID, $pm)) {
+        return if enforcePriestLeash($pm);
+    } else {
+        clearForwardMovement() if AI::inQueue('route', 'mapRoute', 'move');
+        return;
+    }
+
+    return if AI::inQueue('attack', 'route', 'mapRoute', 'move');
+
+    my @p = patrolPoints();
+    $patrolIndex = 0 if $patrolIndex > $#p;
+    my ($x, $y) = @{$p[$patrolIndex]};
+
+    my $me = $char->{pos_to} || $char->{pos};
+    if ($me && blockDist($me, {x=>$x,y=>$y}) <= 6) {
+        $patrolIndex++;
+        $patrolIndex = 0 if $patrolIndex > $#p;
+        ($x, $y) = @{$p[$patrolIndex]};
+    }
+
+    return if (time - $lastPatrolRoute) < 0.7;
+
+    ai_route(
+        huntMap(), $x, $y,
+        attackOnRoute => 2,
+        noSitAuto => 1,
+        distFromGoal => 6,
+        isRandomWalk => 0,
+    );
+    $lastPatrolRoute = time;
+}
+
+# ------------------------------------------------------------
+# STORAGE / BUTTERFLY / TRANSPORTE
+# ------------------------------------------------------------
+
+sub resetStorage {
+    $storageStarted = 0;
+    $storageCompleted = 0;
+}
+
+sub processStorage {
+    return 1 if $storageCompleted && !coreBusy();
+
+    if (!$storageStarted) {
+        if (AI::inQueue('storageAuto', 'NPC', 'transferItems', 'sellAuto', 'buyAuto')) {
+            $storageStarted = 1;
+            return 0;
+        }
+
+        if (!cfg('nqKnight_storageOnReturn', 1)) {
+            $storageCompleted = 1;
+            return 1;
+        }
+
+        message("[nifQuestKnight] STORAGE: iniciando autostorage UMA vez.\n", 'info');
+        Commands::run('autostorage');
+        $storageStarted = 1;
+        return 0;
+    }
+
+    return 0;
+}
+
+sub useButterfly {
+    return 0 if currentMap() eq saveMap();
+    return 0 unless $char && $char->inventory && $char->inventory->isReady();
+    return 0 if (time - $lastButterfly) < 3;
+
+    my $item = $char->inventory->getByNameID(602);
+    $item ||= $char->inventory->getByName('Butterfly Wing');
+
+    unless ($item && ($item->{amount} || 0) > 0) {
+        error "[nifQuestKnight] Sem Butterfly Wing.\n";
+        $lastButterfly = time;
+        return 0;
+    }
+
+    setTravelMode();
+    AI::clear(qw(attack route mapRoute move));
+    $item->use();
+    $lastButterfly = time;
+    return 1;
+}
+
+sub resetTransport { resetStorage(); resetPortalInfo(); $lastProtocolSend=0; }
+
+sub hpPercent {
+    return 0 unless $char && ($char->{hp_max} || 0) > 0;
+    return int(($char->{hp} || 0) * 100 / $char->{hp_max});
+}
+
+
+
+
+
+
+sub onMapChanged {
+    return unless $hpEscapePending;
+
+    # O teleportAuto realmente foi confirmado pelo servidor.
+    $hpEscapeTeleported = 1;
+
+    message(
+        "[nifQuestKnight] HP EMERGENCIA: teleport/Fly Wing confirmado; "
+        . "liberando retorno por Butterfly Wing.\n",
+        'success'
+    );
+}
+
+sub processEmergencyHpEscape {
+    return 0 if $char->{dead};
+
+    # So aplica durante a caca normal.
+    return 0 unless $state eq 'HUNT';
+
+    my $limit = int($config{teleportAuto_hp} || 0);
+    return 0 if $limit <= 0;
+
+    # HP ainda normal.
+    if (!$hpEscapePending) {
+        return 0 if hpPercent() > $limit;
+
+        $hpEscapePending = 1;
+        $hpEscapeTeleported = 0;
+        $hpEscapeStartedAt = time;
+        $hpEscapeRestoreHp = $limit;
+
+        # Para ataque/movimento para o teleportAuto ter prioridade.
+        # Nao limpa a task "teleport".
+        AI::clear(qw(attack route mapRoute move));
+
+        warning(
+            "[nifQuestKnight] HP EMERGENCIA: "
+            . hpPercent()
+            . "% <= ${limit}%. "
+            . "Aguardando teleportAuto/Fly Wing antes da Butterfly.\n"
+        );
+
+        return 1;
+    }
+
+    # Ainda esperando o Fly Wing/Teleport ser confirmado.
+    if (!$hpEscapeTeleported) {
+        AI::clear(qw(attack route mapRoute move));
+        return 1;
+    }
+
+    # Fly Wing ja aconteceu.
+    # Impede teleportAuto_hp de disparar varios Fly Wings seguidos.
+    $config{teleportAuto_hp} = 0;
+
+    $hpEscapePending = 0;
+    $hpEscapeTeleported = 0;
+    $hpEscapeStartedAt = 0;
+
+    setState(
+        'RECOVERY',
+        'GO_HOME',
+        'teleport de emergencia concluido'
+    );
+
+    return 1;
+}
+
+
+
+
+
+
+sub priestAliveAtSave {
+    my ($PID, $pm) = priestMember();
+    return 0 unless $pm;
+    return 0 if memberDead($PID, $pm);
+    return memberMap($pm) eq saveMap() ? 1 : 0;
+}
+
+sub processDeadWait {
+    # Knight morreu: NAO espera Resurrection.
+    # Volta imediatamente ao save point e reinicia o ciclo.
+    if ($char->{dead}) {
+        if ((time - $lastDeadSend) >= 1) {
+            my $p = $char->{pos_to} || $char->{pos};
+
+            if ($p) {
+                sendParty(
+                    "K_DEAD "
+                    . currentMap()
+                    . " $p->{x} $p->{y}"
+                );
+            }
+
+            $lastDeadSend = time;
+        }
+
+        message(
+            "[nifQuestKnight] MORTE: respawn imediato no save; sem esperar Resurrection.\n",
+            'warning'
+        );
+
+        Commands::run('respawn');
+
+        $deadSince = 0;
+        $phase = 'GO_HOME';
+        return;
+    }
+
+    # Segurança caso o servidor já tenha confirmado o respawn.
+    $deadSince = 0;
+    $phase = 'GO_HOME';
+}
+
+sub processTransport {
+    my ($mode)=@_; setTravelMode();
+    if ($char->{dead}) { $phase='DEAD_WAIT'; }
+    if ($phase eq 'DEAD_WAIT') { processDeadWait(); return; }
+    if ($phase eq 'GO_HOME') {
+        if (currentMap() ne saveMap()) { useButterfly(); return; }
+        resetStorage(); resetPortalInfo(); $phase='STORAGE'; message("[nifQuestKnight] $mode: chegou ao save -> STORAGE.\n",'info'); return;
+    }
+    if ($phase eq 'STORAGE') { return unless processStorage(); $phase='WAIT_PORTAL'; message("[nifQuestKnight] $mode: storage concluido -> WAIT_PORTAL.\n",'success'); return; }
+    if ($phase eq 'WAIT_PORTAL') {
+        my $minHP=int(cfg('nqKnight_readyMinHPPercent',90)); return if hpPercent()<$minHP;
+        if ((time-$lastProtocolSend)>=syncRetrySeconds()) { sendReady($mode); $lastProtocolSend=time; }
+        return;
+    }
+    if ($phase eq 'ENTER_PORTAL') {
+        if (currentMap() ne saveMap()) {
+            sendCurrentMap($mode) if (time-$lastMapReport)>=syncRetrySeconds();
+            if (currentMap() eq npcMap()) { $phase='WAIT_PRIEST'; } else { $phase='WAIT_RESYNC'; }
+            return;
+        }
+        return unless $portalId ne '' && $portalMode eq $mode && defined $portalX && defined $portalY;
+        if ($portalEnterStartedAt && (time-$portalEnterStartedAt)>=transportTimeout()) {
+            my $pos=$char->{pos_to}||$char->{pos}; if($pos){sendParty("K_RESYNC $portalId $mode ".currentMap()." $pos->{x} $pos->{y}");}
+            warning("[nifQuestKnight] SYNC EXPIRADO: nao atravessei portalId=$portalId em ".transportTimeout()."s. Aguardando NOVO id.\n");
+            resetPortalInfo(); $phase='WAIT_PORTAL'; $lastProtocolSend=0; return;
+        }
+        if (!AI::inQueue('route','mapRoute','move')) {
+            message("[nifQuestKnight] $mode: indo para portalId=$portalId em $portalX,$portalY.\n",'info');
+            $lastRoute=0; routeTo(saveMap(),$portalX,$portalY,0,0); $portalRouteStartedAt=time;
+        }
+        return;
+    }
+    if ($phase eq 'WAIT_PRIEST') {
+        sendCurrentMap($mode) if (time-$lastMapReport)>=syncRetrySeconds();
+        if ($pArrivedId eq $portalId && $pArrivedMode eq $mode && $pArrivedMap eq npcMap()) {
+            message("[nifQuestKnight] TRANSPORTE CONCLUIDO: Priest confirmou ".npcMap()." para portalId=$portalId.\n",'success');
+            resetPortalInfo(); if($mode eq 'RECOVERY'){resumeNormal();}else{$phase='GO_DEADMAN';}
+        }
+        return;
+    }
+    if ($phase eq 'WAIT_RESYNC') {
+        sendCurrentMap($mode) if (time-$lastMapReport)>=syncRetrySeconds();
+        if (currentMap() ne saveMap()) { useButterfly(); return; }
+        my $oldId=$portalId; resetPortalInfo();
+        warning("[nifQuestKnight] RESYNC: voltei ao save; portalId=$oldId descartado. Aguardando NOVO portalId.\n");
+        $phase='WAIT_PORTAL'; $lastProtocolSend=0; return;
+    }
+}
+
+# ------------------------------------------------------------
+# DEADMAN / QUEST
+# ------------------------------------------------------------
+
+sub findDeadman {
+    return unless currentMap() eq npcMap() && $npcsList;
+
+    my $name = cfg('nqKnight_npcName', 'Deadman');
+    my $tx = int(cfg('nqKnight_npcX', 332));
+    my $ty = int(cfg('nqKnight_npcY', 327));
+
+    my @npcs = @{$npcsList->getItems()};
+
+    for my $n (@npcs) {
+        next unless $n && defined $n->{name};
+        return $n if lc($n->{name}) eq lc($name);
+    }
+
+    my ($best, $bd) = (undef, 99999);
+    for my $n (@npcs) {
+        next unless $n;
+        my $p = $n->{pos} || $n->{pos_to};
+        next unless $p;
+        my $d = blockDist($p, {x=>$tx, y=>$ty});
+        if ($d < $bd && $d <= 6) {
+            $best = $n;
+            $bd = $d;
+        }
+    }
+
+    return $best;
+}
+
+sub resetDeadman {
+    $deadmanActive = 0;
+    $deadmanMode = '';
+    $deadmanStage = 0;
+    $deadmanStartedAt = 0;
+}
+
+sub normalizeOption {
+    my ($s) = @_;
+    $s //= '';
+    $s =~ s/\^[0-9A-Fa-f]{6}//g;
+    $s =~ s/^\s+|\s+$//g;
+    $s =~ s/\s+/ /g;
+    return $s;
+}
+
+sub choosePickupResponse {
+    my ($responses) = @_;
+    return unless $responses && ref($responses) eq 'ARRAY';
+
+    my @o = map { normalizeOption($_) } @$responses;
+
+    #for my $i (0..$#o) {
+    #    return $i if $o[$i] =~ /Loli\s*Ruri/i;
+    #}
+	
+	for my $i (0..$#o) {
+		return $i if $o[$i] =~ /^Disguise$/i;
+	}
+
+    for my $i (0..$#o) {
+        return $i if $o[$i] =~ /^Sure$/i;
+    }
+
+    return 0 if $deadmanStage == 0 && $#o >= 1;
+    return 1 if $deadmanStage >= 1 && $#o >= 2;
+
+    return;
+}
+
+sub startDeadman {
+    my ($mode) = @_;
+
+    return 0 if $deadmanActive;
+    return 0 if coreBusy();
+    return 0 if %talk;
+    return 0 if (time - $lastDeadmanTalk) < 1;
+
+    my $npc = findDeadman();
+    return 0 unless $npc;
+
+    setTravelMode();
+
+    $deadmanActive = 1;
+    $deadmanMode = $mode;
+    $deadmanStage = 0;
+    $deadmanStartedAt = time;
+    $lastDeadmanTalk = time;
+
+    eval { $npc->sendTalk; 1 } or do {
+        resetDeadman();
+        return 0;
+    };
+
+    message("[nifQuestKnight] DEADMAN: iniciando $mode.\n", 'info');
+    return 1;
+}
+
+sub onDeadmanTalkContinue {
+    return unless $deadmanActive;
+    return unless %talk && defined $talk{ID};
+    eval { $messageSender->sendTalkContinue($talk{ID}); };
+}
+
+sub onDeadmanTalkResponses {
+    my (undef, $args) = @_;
+    return unless $deadmanActive;
+    return unless %talk && defined $talk{ID};
+
+    my $responses =
+        ($args && ref($args) eq 'HASH' && ref($args->{responses}) eq 'ARRAY')
+            ? $args->{responses}
+            : $talk{responses};
+
+    return unless $responses && ref($responses) eq 'ARRAY';
+
+    if ($deadmanMode eq 'turnin') {
+        eval { $messageSender->sendTalkCancel($talk{ID}); };
+        resetDeadman();
+        return;
+    }
+
+    my $idx = choosePickupResponse($responses);
+    unless (defined $idx && $idx < $#$responses) {
+        eval { $messageSender->sendTalkCancel($talk{ID}); };
+        resetDeadman();
+        return;
+    }
+
+    eval { $messageSender->sendTalkResponse($talk{ID}, $idx + 1); };
+    $deadmanStage++;
+}
+
+sub onDeadmanTalkDone {
+    return unless $deadmanActive;
+    my $mode = $deadmanMode;
+    resetDeadman();
+    $lastDeadmanTalk = time;
+
+    message(
+        "[nifQuestKnight] DEADMAN: $mode terminou; quest=" . questStatus() . ".\n",
+        'info'
+    );
+}
+
+sub goDeadman {
+    return 0 unless currentMap() eq npcMap();
+
+    my $npc = findDeadman();
+    my $target = $npc ? ($npc->{pos} || $npc->{pos_to}) : undef;
+
+    $target ||= {
+        x => int(cfg('nqKnight_npcX', 332)),
+        y => int(cfg('nqKnight_npcY', 327)),
+    };
+
+    my $me = $char->{pos_to} || $char->{pos};
+
+    if (blockDist($me, $target) > 4) {
+        setTravelMode();
+        routeTo(npcMap(), $target->{x}, $target->{y}, 4, 2);
+        return 0;
+    }
+
+    return 1;
+}
+
+sub processQuestReturn {
+    if ($phase =~ /^(GO_HOME|STORAGE|WAIT_PORTAL|ENTER_PORTAL|WAIT_PRIEST|WAIT_RESYNC|DEAD_WAIT)$/) {
+        processTransport('QUEST_RETURN');
+        return;
+    }
+
+    if ($phase eq 'GO_DEADMAN') {
+        return unless goDeadman();
+        $phase = 'TURNIN';
+        return;
+    }
+
+    if ($phase eq 'TURNIN') {
+        my $own = questStatus();
+
+        if ($own eq 'complete') {
+            startDeadman('turnin');
+            return;
+        }
+
+        if ($own eq 'inactive' || pairDesiredState() eq 'QUEST_PICKUP') {
+            setState('QUEST_PICKUP', 'GO_DEADMAN', 'turn-in avancou');
+            return;
+        }
+
+        if ($own eq 'incomplete') {
+            resumeNormal();
+        }
+    }
+}
+
+sub processQuestPickup {
+    if (currentMap() ne npcMap()
+        || $phase =~ /^(GO_HOME|STORAGE|WAIT_PORTAL|ENTER_PORTAL|WAIT_PRIEST|WAIT_RESYNC|DEAD_WAIT)$/) {
+        if ($phase eq 'GO_DEADMAN' && currentMap() ne npcMap()) {
+            $phase = 'GO_HOME';
+            resetTransport();
+        }
+        processTransport('QUEST_PICKUP');
+        return;
+    }
+
+    if ($phase eq 'GO_DEADMAN') {
+        return unless goDeadman();
+        $phase = 'SYNC';
+        return;
+    }
+
+    if ($phase eq 'SYNC') {
+        my $own = questStatus();
+        my $peer = peerQuest();
+
+        if ($own eq 'complete') {
+            startDeadman('turnin');
+            return;
+        }
+
+        if ($own eq 'inactive') {
+            startDeadman('pickup');
+            return;
+        }
+
+        if ($own eq 'incomplete' && $peer eq 'incomplete') {
+            setState('HUNT', 'RUN', 'ambos incomplete');
+            return;
+        }
+
+        return;
+    }
+}
+
+# ------------------------------------------------------------
+# RECOVERY
+# ------------------------------------------------------------
+
+sub processRecovery {
+    processTransport('RECOVERY');
+}
+
+# ------------------------------------------------------------
+# AI
+# ------------------------------------------------------------
+
+sub onAIPre {
+    return unless enabled();
+    applyBaseConfig();
+
+    if ($char && $char->{sitting}) {
+        eval { AI::stand(); };
+    }
+}
+
+sub onAI {
+    return unless enabled();
+    return unless $char && $field;
+
+    my $now = time;
+    return if ($now - $lastTick) < 0.20;
+    $lastTick = $now;
+
+    applyBaseConfig();
+
+    # Kafra/NPC/storage tem prioridade absoluta.
+    return if coreBusy();
+
+    broadcastStatus(0);
+
+    # Excecoes globais antes do dispatcher.
+    if ($char->{dead} && $state ne 'RECOVERY') {
+        $deadSince ||= time;
+        setState('RECOVERY', 'DEAD_WAIT', 'Knight morreu');
+        return;
+    }
+	
+	
+	
+	# HP critico:
+	# deixa teleportAuto executar o Fly Wing primeiro.
+	# Depois do Map Change inicia o RECOVERY/Butterfly.
+	if (processEmergencyHpEscape()) {
+		return;
+	}
+	
+	
+
+    if ($state ne 'RECOVERY'
+        && $priestDiedAt
+        && (time - $priestDiedAt) <= 8) {
+        setState('RECOVERY', 'GO_HOME', 'P_DIED recebido');
+        return;
+    }
+
+    if ($state eq 'HUNT') {
+        processHunt();
+        return;
+    }
+
+    if ($state eq 'QUEST_RETURN') {
+        processQuestReturn();
+        return;
+    }
+
+    if ($state eq 'QUEST_PICKUP') {
+        processQuestPickup();
+        return;
+    }
+
+    if ($state eq 'RECOVERY') {
+        processRecovery();
+        return;
+    }
+
+    setState('HUNT', 'RUN', 'estado invalido');
+}
+
+# ------------------------------------------------------------
+# COMMAND
+# ------------------------------------------------------------
+
+sub cmdNQK {
+    my (undef, $args) = @_;
+    $args //= '';
+    $args =~ s/^\s+|\s+$//g;
+
+    if ($args eq '' || $args eq 'status') {
+        my $age = $peerQuestAt ? sprintf('%.1f', time - $peerQuestAt) : '-';
+        message("nifQuestKnight v$VERSION\n", 'list');
+        message("state=$state phase=$phase\n", 'list');
+        message("map=" . currentMap() . "\n", 'list');
+        message("quest=" . questStatus() . " peer=" . peerQuest() . " peerAge=$age\n", 'list');
+        message("storageStarted=$storageStarted storageCompleted=$storageCompleted\n", 'list');
+        message(
+            "portalId=" . ($portalId || '-')
+            . " portalMode=" . ($portalMode || '-')
+            . " portal=" . (defined $portalX ? "$portalX,$portalY" : '-')
+            . " portalAge=" . ($portalAt ? sprintf('%.1f',time-$portalAt) : '-')
+            . " P_ARRIVED=" . ($pArrivedMap || '-')
+            . "\n", 'list'
+        );
+        my ($PID, $pm) = priestMember();
+        my ($ls, $ld) = leashState($pm);
+        message(
+            "HP=" . hpPercent()
+            . "% patrolIndex=$patrolIndex"
+            . " leash=$ls"
+            . " dist=" . (defined $ld ? $ld : '-')
+            . " attackAuto=" . ($config{attackAuto} // '-')
+            . "\n",
+            'list'
+        );
+        return;
+    }
+
+    if ($args eq 'version') {
+        message("$VERSION\n", 'list');
+        return;
+    }
+
+    if ($args eq 'hunt') {
+        setState('HUNT', 'RUN', 'comando');
+        return;
+    }
+
+    if ($args eq 'recovery') {
+        setState('RECOVERY', $char->{dead} ? 'DEAD_WAIT' : 'GO_HOME', 'comando');
+        return;
+    }
+
+    if ($args eq 'return') {
+        setState('QUEST_RETURN', 'GO_HOME', 'comando');
+        return;
+    }
+
+    if ($args eq 'pickup') {
+        setState('QUEST_PICKUP', currentMap() eq npcMap() ? 'GO_DEADMAN' : 'GO_HOME', 'comando');
+        return;
+    }
+
+    message("Uso: nqk status | version | hunt | recovery | return | pickup\n", 'list');
+}
+
+sub onUnload {
+    restoreConfig();
+    Commands::unregister($commands) if $commands;
+    Plugins::delHooks($hooks) if $hooks;
+}
+
+1;

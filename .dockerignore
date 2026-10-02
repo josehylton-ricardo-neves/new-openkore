@@ -1,0 +1,18 @@
+# Segredos e dados que nunca precisam entrar no build context
+.env
+vpn/
+logs/
+.git/
+.gitignore
+
+# Bot2 não é necessário para compilar o runtime/XSTools compartilhado.
+instances/openkore-bot2/
+
+# Logs eventualmente existentes dentro da árvore do OpenKore
+instances/openkore-bot1/logs/
+
+# Arquivos temporários/editor
+**/*.log
+**/*.tmp
+**/*.bak
+**/~*

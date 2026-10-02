@@ -1,0 +1,77 @@
+
+################################################################################
+# NIFLHEIM v4.6 - KNIGHT
+################################################################################
+
+nqKnight_enabled 1
+nqKnight_priestName Curador
+
+#loli ruri
+#nqKnight_saveMap geffen
+#nqKnight_npcMap nif_fild01
+#nqKnight_huntMap nif_fild02
+#nqKnight_directMemoMap nif_fild01
+#nqKnight_questID 60176
+
+#disguise
+nqKnight_saveMap geffen
+nqKnight_npcMap nif_fild01
+nqKnight_huntMap nif_fild01
+nqKnight_directMemoMap nif_fild01
+nqKnight_questID 60173
+
+
+# Plugin usa 12 como hard leash.
+nqKnight_huntLeash 9
+nqKnight_leashReleaseDistance 6
+nqKnight_lostPosHeartbeat 5
+
+
+nqKnight_leashSoft 8
+nqKnight_leashHard 12
+
+nqKnight_huntPosHeartbeat 2
+
+
+
+# Recovery/storage
+nqKnight_storageOnRecovery 1
+nqKnight_storageRequired 1
+nqKnight_storageStartTimeout 8
+nqKnight_storageStartMaxTries 3
+nqKnight_storageFinishGrace 3
+nqKnight_forcedRespawnCooldown 3
+nqKnight_blockIdleTeleport 1
+
+# Use sua Kafra real.
+storageAuto 0
+storageAuto_npc geffen 203 123
+storageAuto_distance 5
+storageAuto_npc_type 1
+storageAuto_keepOpen 0
+
+
+
+
+
+
+################################################################################
+# PROTECAO DO PRIEST COM PROVOKE
+################################################################################
+
+# 1 = Knight usa Provoke em monstros atacando o Priest
+# 0 = desativado
+nqKnight_provokeProtectPriest 1
+
+# Nivel desejado do Provoke.
+# Se o Knight tiver nivel menor, o plugin usa automaticamente o nivel disponível.
+nqKnight_provokeLevel 10
+
+# Distancia maxima entre Knight e monstro para tentar Provoke
+nqKnight_provokeDistance 9
+
+# Tempo minimo entre tentativas de Provoke
+nqKnight_provokeCooldown 3
+
+# SP absoluto minimo que o Knight deve possuir
+nqKnight_provokeMinSP 10
