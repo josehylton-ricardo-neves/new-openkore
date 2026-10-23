@@ -1,0 +1,54 @@
+37.19.199.134:51820			# US-FREE#20
+79.127.254.92:51820			# CA-FREE#12
+103.88.234.229:51820		# MX-FREE#2
+149.50.211.139:51820		# SG-FREE#3				194.180.34.13:51820			#US-FREE#142
+89.105.214.200:51820		# NL-FREE#284
+
+
+195.242.214.69				#CA-FREE#25
+195.242.214.100				#CA-FREE#27
+195.242.214.118				#CA-FREE#28
+
+138.199.50.143				#US-FREE#88
+138.199.50.137				#US-FREE#106
+
+
+
+
+
+NL119
+NL111
+
+NL114
+NL236
+JP34
+NL123
+
+
+
+
+
+docker compose up -d
+docker compose up -d vpn-d vpn-e
+docker compose start vpn-d vpn-e
+docker compose ps
+
+
+docker compose start
+docker compose stop
+
+docker compose down
+
+
+
+
+powershell.exe -ExecutionPolicy Bypass -File ".\captcha_listener.ps1"
+ 
+ 
+ 
+ 
+  curl.exe http://127.0.0.1:18090/captcha
+  
+  
+  
+  

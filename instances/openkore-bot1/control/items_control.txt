@@ -20,6 +20,11 @@ Oridecon 0 1 0
 Elunium 0 1 0
 Rough Elunium 0 1 0
 
+#bubble gun
+12210 10 0 0
+Bubble Gun 10 0 0
+
+
 
 #Stiletto[3]
 1217 0 0 1

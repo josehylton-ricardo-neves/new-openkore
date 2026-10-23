@@ -6,7 +6,7 @@ automacro AtivarAutolootAoEntrar {
 
 	call {
 		pause 1
-		do c \@autoloot 50
+		do c \@autoloot 100
 		log ThanatosRO: comando autoloot enviado
 	}
 }

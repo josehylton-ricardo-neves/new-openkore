@@ -1898,7 +1898,7 @@ prt_fild04 160 387 prt_fild00 165 18
 prt_fild04 323 387 prt_fild00 317 18
 prt_fild04 378 72 prt_fild05 13 63
 prt_fild04 384 155 prt_fild05 14 141
-prt_fild04 384 334 prt_fild05 15 333
+prt_fild04 384 334 prt_fild05 20 333
 prt_fild05 13 63 prt_fild04 378 72
 prt_fild05 14 141 prt_fild04 384 155
 prt_fild05 15 333 prt_fild04 384 334

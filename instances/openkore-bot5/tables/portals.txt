@@ -2605,7 +2605,7 @@ ve_fild07 147 371 veins 146 28
 veins 218 361 ve_fild06 148 225
 ve_fild06 153 220 veins 218 361
 ve_fild01 366 267 ve_fild02 36 263
-ve_fild01 184 20 ve_fild04 172 333
+ve_fild01 184 20 ve_fild04 174 334
 ra_fild11 233 27 ve_fild01 243 363
 ve_fild01 243 368 ra_fild11 232 32
 ve_fild01 350 92 ve_fild02 78 133
@@ -2965,7 +2965,7 @@ airplane 254 54 airplane 91 67
 airplane 87 67 airplane 250 54
 yuno 96 261 airplane 244 58
 yuno 6 261 airplane_01 244 58
-izlude 149 39 izlude 182 56
+izlude 149 39 izlude 192 56
 izlude 176 56 izlude 145 40
 moscovia 205 98 mosk_in 214 255
 moscovia 203 171 mosk_in 86 180

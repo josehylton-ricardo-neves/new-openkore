@@ -57,7 +57,7 @@ XKore_ID
 
 # It is not advised to set secureAdminPassword if you're using Xkore 2
 secureAdminPassword 1
-adminPassword grovetaw
+adminPassword sheatwiv
 callSign
 commandPrefix ;
 callSignGM 0
@@ -229,7 +229,7 @@ cartMaxWeight 8000
 itemsTakeGreed 0
 itemsCheckWeight 1
 
-lockMap moc_fild13
+lockMap ve_fild04
 lockMap_x
 lockMap_y
 lockMap_randX
@@ -238,7 +238,7 @@ lockMap_randY
 route_escape_reachedNoPortal 1
 route_escape_randomWalk 1
 route_escape_shout
-route_randomWalk 1
+route_randomWalk 0
 route_randomWalk_inLockOnly 0
 route_randomWalk_inTown 0
 route_randomWalk_maxRouteTime 75
@@ -327,16 +327,16 @@ tankModeTarget
 
 teleportAuto_hp 0
 teleportAuto_sp 0
-teleportAuto_idle 0
+teleportAuto_idle 1
 teleportAuto_portal 0
-teleportAuto_search 0
+teleportAuto_search 1
 teleportAuto_minAggressives 0
 teleportAuto_minAggressivesInLock 0
 teleportAuto_onlyWhenSafe 0
 teleportAuto_maxDmg 0
 teleportAuto_maxDmgInLock 0
 teleportAuto_deadly 0
-teleportAuto_useSkill 0
+teleportAuto_useSkill 1
 teleportAuto_useChatCommand
 teleportAuto_allPlayers 0
 teleportAuto_notPlayers Curador,MIlIlIlM,LordMatador,BloodSin
@@ -363,7 +363,7 @@ teleportAuto_equip_leftAccessory
 teleportAuto_equip_rightAccessory
 teleportAuto_lostHomunculus
 teleportAuto_useItemForRespawn
-teleportAuto_item1 Infinite Fly Wing
+teleportAuto_item1
 teleportAuto_item2
 
 dealAuto 1
@@ -1300,7 +1300,7 @@ storageSellRoutine_goCommand @go ayothaya
 # 0 desativa aquele gatilho.
 # Limites que disparam a rotina por recurso baixo
 storageSellRoutine_hp 10
-storageSellRoutine_sp 2
+storageSellRoutine_sp 4
 
 # 0 = HP/SP baixo -> @go alberta -> healer -> teleportador
 # 1 = HP/SP baixo -> @go alberta -> storage -> sell -> healer -> teleportador

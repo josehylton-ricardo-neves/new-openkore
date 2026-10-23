@@ -598,7 +598,7 @@ alb_ship 41 163 alberta 178 165
 alb_ship 68 99 alb_ship 37 174
 alb_ship 160 171 alberta 209 173
 alb2trea 88 111 treasure01 69 22
-alberta 15 234 pay_fild03 392 63
+alberta 15 234 pay_fild03 388 63
 alberta 33 42 alberta_in 78 44
 alberta 65 233 alberta_in 14 141
 alberta 93 205 alberta_in 114 130
@@ -1509,7 +1509,7 @@ moc_fild02 228 29 moc_fild13 298 367
 moc_fild02 332 19 moc_fild03 70 341
 moc_fild02 350 339 pay_fild04 194 17
 moc_fild02 378 272 pay_gld 20 276
-moc_fild03 17 37 moc_fild13 308 49
+moc_fild03 17 37 moc_fild13 305 49
 moc_fild03 70 341 moc_fild02 332 19
 moc_fild03 179 16 pay_fild11 38 330
 moc_fild03 303 170 pay_fild01 13 152
@@ -1652,17 +1652,17 @@ pay_dun03 127 62 pay_dun04 40 37
 pay_dun03 155 161 pay_dun02 137 128
 pay_dun04 40 37 pay_dun03 127 62
 pay_dun04 202 206 pay_dun03 127 62
-pay_fild01 13 152 moc_fild03 303 170
+pay_fild01 13 152 moc_fild03 299 170
 pay_fild01 278 14 pay_fild02 83 386
 pay_fild01 353 14 pay_fild02 167 390
 pay_fild01 379 201 pay_fild07 23 207
 pay_fild01 333 361 payon 122 27
 #pay_fild02 16 175 pay_fild11 297 135
-pay_fild02 83 386 pay_fild01 278 14
+pay_fild02 83 386 pay_fild01 278 18
 pay_fild02 134 16 pay_fild05 127 378
 pay_fild02 167 390 pay_fild01 353 14
 pay_fild02 284 108 pay_fild03 15 110
-pay_fild03 15 110 pay_fild02 284 108
+pay_fild03 15 110 pay_fild02 280 108
 pay_fild03 172 281 pay_fild07 164 17
 pay_fild03 313 16 pay_fild06 305 375
 pay_fild03 392 63 alberta 15 234
@@ -2618,7 +2618,7 @@ ve_fild03 355 223 ve_fild04 49 249
 ve_fild03 222 43 ve_fild05 200 325
 ve_fild04 174 339 ve_fild01 184 25
 ve_fild04 44 249 ve_fild03 350 220
-ve_fild04 115 50 ve_fild06 80 183
+ve_fild04 115 50 ve_fild06 80 193
 ve_fild05 200 330 ve_fild03 222 48
 ve_fild05 359 192 ve_fild06 80 183
 ve_fild06 153 220 veins 218 355
@@ -2966,7 +2966,7 @@ airplane 254 54 airplane 91 67
 airplane 87 67 airplane 250 54
 yuno 96 261 airplane 244 58
 yuno 6 261 airplane_01 244 58
-izlude 149 39 izlude 182 56
+izlude 149 39 izlude 192 56
 izlude 176 56 izlude 145 40
 moscovia 205 98 mosk_in 214 255
 moscovia 203 171 mosk_in 86 180

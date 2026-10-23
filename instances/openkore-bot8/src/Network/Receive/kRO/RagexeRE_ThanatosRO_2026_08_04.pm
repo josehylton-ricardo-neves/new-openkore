@@ -94,6 +94,11 @@ sub new {
 	$self->{packet_list}{'7FF3'} = ['thanatos_pacr', 'v a4 v a*', [qw(len magic type payload)]];
 	
 	
+	# 0A41 - Skill AOE Effect
+	# Utiliza o processamento nativo de habilidade em coordenadas
+	$self->{packet_list}{'0A41'} = ['skill_use_location', 'a4 v4 V', [qw(sourceID skillID lv x y tick)]];
+	
+	
 	
 	delete $self->{packet_lut}{map_login_trigger};
 

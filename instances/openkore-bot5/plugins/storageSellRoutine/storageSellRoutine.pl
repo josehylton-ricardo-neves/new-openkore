@@ -5,7 +5,7 @@ use warnings;
 use Time::HiRes qw(time);
 
 use Plugins;
-use Globals qw($char $field $net $messageSender %config);
+use Globals qw($char $field $net $messageSender $taskManager %config);
 use Log qw(message warning error);
 use Network;
 use AI;
@@ -42,6 +42,13 @@ my $reason         = '';
 my $startup_pending = 1;
 my $death_pending   = 0;
 my $last_completed  = 0;
+
+# Guarda e suspende apenas o teleporte automatico por inatividade enquanto
+# storageSellRoutine/albertaAfterService estiverem executando. A configuracao
+# original e restaurada ao fim, em reset, timeout, reconexao ou unload.
+my $teleport_auto_idle_saved;
+my $teleport_auto_idle_was_saved = 0;
+my $pending_start_phase;
 
 sub cfg {
     my ($key, $default) = @_;
@@ -81,6 +88,73 @@ sub release_hold {
     AI::clear('storageSellRoutineHold');
 }
 
+sub pause_idle_teleport {
+    return if $teleport_auto_idle_was_saved;
+
+    # Preserva exatamente o valor anterior para nao alterar a configuracao
+    # normal de cacada (Creamy Card ou Fly Wing).
+    $teleport_auto_idle_saved = exists $config{'teleportAuto_idle'}
+        ? $config{'teleportAuto_idle'}
+        : undef;
+    $teleport_auto_idle_was_saved = 1;
+    $config{'teleportAuto_idle'} = 0;
+
+    message "[storageSellRoutine] Pausando teleportAuto_idle durante a rotina de servico.\n", 'success';
+}
+
+sub resume_idle_teleport {
+    return unless $teleport_auto_idle_was_saved;
+
+    if (defined $teleport_auto_idle_saved) {
+        $config{'teleportAuto_idle'} = $teleport_auto_idle_saved;
+    } else {
+        delete $config{'teleportAuto_idle'};
+    }
+
+    my $restored = defined $teleport_auto_idle_saved
+        ? $teleport_auto_idle_saved
+        : '(valor padrao)';
+
+    $teleport_auto_idle_was_saved = 0;
+    undef $teleport_auto_idle_saved;
+
+    message "[storageSellRoutine] Teleport automatico por inatividade restaurado: $restored.\n", 'success';
+}
+
+
+sub teleport_task_pending {
+    my ($show_debug) = @_;
+
+    # O teleporte fica na fila de IA do personagem,
+    # nao na lista de tarefas do $taskManager.
+    my $pending = AI::inQueue('teleport') ? 1 : 0;
+
+    if ($show_debug) {
+        my $action = AI::action();
+
+        $action = '(nenhuma)'
+            unless defined $action && $action ne '';
+
+        message
+            "[storageSellRoutine][DEBUG] "
+            . "AI::inQueue(teleport)="
+            . ($pending ? 'SIM' : 'NAO')
+            . "; acao atual=$action\n";
+    }
+
+    return $pending;
+}
+
+
+
+sub begin_start_phase {
+    my ($next_phase) = @_;
+
+    hold_ai();
+    set_phase($next_phase);
+    send_go_alberta();
+}
+
 sub reset_runtime {
     my ($why) = @_;
 
@@ -92,6 +166,8 @@ sub reset_runtime {
     Plugins::callHook('storageSellRoutine_manual_reset', {
         reason => $why,
     });
+
+    resume_idle_teleport();
 
     # Remove qualquer tarefa pertencente ao ciclo.
     AI::clear(
@@ -125,36 +201,100 @@ sub send_go_alberta {
     $messageSender->sendChat($cmd);
 }
 
+#sub start_routine {
+#    my ($why) = @_;
+#    return unless enabled();
+#    return unless in_game();
+#    return unless $char && $field && $messageSender;
+#
+#    $reason = $why || 'manual';
+#	
+#	pause_idle_teleport();
+#
+#    message "[storageSellRoutine] Iniciando rotina. Motivo: $reason\n", 'success';
+#
+#    hold_ai();
+#    set_phase('GO_STORAGE');
+#    send_go_alberta();
+#}
+
+
 sub start_routine {
     my ($why) = @_;
+
     return unless enabled();
     return unless in_game();
     return unless $char && $field && $messageSender;
 
     $reason = $why || 'manual';
 
+    # Impede novos teleportes por inatividade.
+    # O teleporte já iniciado continua sendo monitorado.
+    pause_idle_teleport();
+
+    if (teleport_task_pending(1)) {
+        $pending_start_phase = 'GO_STORAGE';
+        set_phase('WAIT_TELEPORT');
+
+        message "[storageSellRoutine] Teleporte em andamento; aguardando antes de iniciar o storage.\n", 'success';
+
+        return;
+    }
+
     message "[storageSellRoutine] Iniciando rotina. Motivo: $reason\n", 'success';
 
-    hold_ai();
-    set_phase('GO_STORAGE');
-    send_go_alberta();
+    begin_start_phase('GO_STORAGE');
 }
 
 
+
+#sub start_service_only {
+#    my ($why) = @_;
+#    return unless enabled();
+#    return unless in_game();
+#    return unless $char && $field && $messageSender;
+#
+#    $reason = $why || 'recuperacao';
+#
+#	pause_idle_teleport();
+#
+#    message "[storageSellRoutine] Indo para Alberta sem storage/sell. Motivo: $reason\n", 'success';
+#
+#    hold_ai();
+#    set_phase('GO_SERVICE');
+#    send_go_alberta();
+#}
+
 sub start_service_only {
     my ($why) = @_;
+
     return unless enabled();
     return unless in_game();
     return unless $char && $field && $messageSender;
 
     $reason = $why || 'recuperacao';
 
+    # Desativa somente o gatilho de teleporte por inatividade.
+    pause_idle_teleport();
+
+    if (teleport_task_pending(1)) {
+        $pending_start_phase = 'GO_SERVICE';
+        set_phase('WAIT_TELEPORT');
+
+        message "[storageSellRoutine] Teleporte em andamento; aguardando antes do servico.\n", 'success';
+
+        return;
+    }
+
     message "[storageSellRoutine] Indo para Alberta sem storage/sell. Motivo: $reason\n", 'success';
 
-    hold_ai();
-    set_phase('GO_SERVICE');
-    send_go_alberta();
+    begin_start_phase('GO_SERVICE');
 }
+
+
+
+
+
 
 #sub finish_service_only {
 #    return unless $phase eq 'GO_SERVICE';
@@ -485,6 +625,7 @@ sub onAfterServiceCompleted {
 
     return unless $phase eq 'POST_SERVICE';
 
+    resume_idle_teleport();
     $last_completed = time;
     $reason = '';
 
@@ -517,6 +658,67 @@ sub onAI {
         start_routine('morte/respawn');
         return;
     }
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	# Aguarda a conclusao de um teleporte que ja estava em andamento.
+    if ($phase eq 'WAIT_TELEPORT') {
+        if (!teleport_task_pending()) {
+            my $next_phase = $pending_start_phase;
+
+            $pending_start_phase = undef;
+
+            if (defined $next_phase
+                && ($next_phase eq 'GO_STORAGE'
+                    || $next_phase eq 'GO_SERVICE')) {
+
+                message
+                    "[storageSellRoutine] Teleporte concluido. Iniciando o servico.\n",
+                    'success';
+
+                begin_start_phase($next_phase);
+
+            } else {
+                warning
+                    "[storageSellRoutine] Fase de inicio invalida apos espera de teleporte.\n";
+
+                resume_idle_teleport();
+                $last_completed = time;
+                $reason = '';
+                set_phase('IDLE');
+            }
+        }
+
+        return;
+    }
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 
     # Primeira entrada no map server da sessao.
     if ($phase eq 'IDLE' && $startup_pending && cfg('storageSellRoutine_onStart', 1)) {
@@ -576,6 +778,7 @@ sub onAI {
 
 			warning "[storageSellRoutine] Timeout aguardando rotina pos-servico. Liberando IA.\n";
 
+			resume_idle_teleport();
 			$last_completed = time;
 			$reason = '';
 			set_phase('IDLE');
@@ -702,7 +905,8 @@ sub blockNativeAuto {
 }
 
 sub onMapServerConnect {
-    # Nova sessao/login: a rotina de inicio deve rodar outra vez.
+    # Nova sessao/login: restaura a configuracao e reinicia o ciclo.
+    resume_idle_teleport();
     AI::clear('storageSellRoutineHold');
     $phase = 'IDLE';
     $phase_since = 0;
@@ -721,6 +925,7 @@ sub unload {
     Plugins::delHooks($hooks);
     Commands::unregister($commands) if $commands;
 
+    resume_idle_teleport();
     AI::clear('storageSellRoutineHold');
 
     message "[storageSellRoutine] Plugin descarregado.\n", 'success';

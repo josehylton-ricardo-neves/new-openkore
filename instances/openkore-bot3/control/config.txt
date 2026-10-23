@@ -57,7 +57,7 @@ XKore_ID
 
 # It is not advised to set secureAdminPassword if you're using Xkore 2
 secureAdminPassword 1
-adminPassword chaswaiw
+adminPassword davawraf
 callSign
 commandPrefix ;
 callSignGM 0
@@ -336,7 +336,7 @@ teleportAuto_onlyWhenSafe 0
 teleportAuto_maxDmg 0
 teleportAuto_maxDmgInLock 0
 teleportAuto_deadly 0
-teleportAuto_useSkill 0
+teleportAuto_useSkill 1
 teleportAuto_useChatCommand
 teleportAuto_allPlayers 0
 teleportAuto_notPlayers Curador,MIlIlIlM,LordMatador,BloodSin
@@ -363,7 +363,7 @@ teleportAuto_equip_leftAccessory
 teleportAuto_equip_rightAccessory
 teleportAuto_lostHomunculus
 teleportAuto_useItemForRespawn
-teleportAuto_item1 Infinite Fly Wing
+teleportAuto_item1
 teleportAuto_item2
 
 dealAuto 1
@@ -1304,7 +1304,7 @@ storageSellRoutine_goCommand @go einbech
 # 0 desativa aquele gatilho.
 # Limites que disparam a rotina por recurso baixo
 storageSellRoutine_hp 10
-storageSellRoutine_sp 2
+storageSellRoutine_sp 4
 
 # 0 = HP/SP baixo -> @go alberta -> healer -> teleportador
 # 1 = HP/SP baixo -> @go alberta -> storage -> sell -> healer -> teleportador
@@ -1316,7 +1316,7 @@ storageSellRoutine_lowResourceStorage 0
 
 # Pequenos controles internos.
 storageSellRoutine_goSettle 2
-storageSellRoutine_queueGrace 2
+storageSellRoutine_queueGrace 3
 storageSellRoutine_cooldown 3
 
 storageSellRoutine_postServiceTimeout 20
@@ -1347,8 +1347,8 @@ albertaAfterService_teleporterNpc einbech 192 125
 # r0 = escolhe a PRIMEIRA opcao do menu
 albertaAfterService_teleporterSteps r0
 
-albertaAfterService_npcDistance 15
-albertaAfterService_timeout 10
+albertaAfterService_npcDistance 7
+albertaAfterService_timeout 15
 
 
 

@@ -604,7 +604,7 @@ alberta 65 233 alberta_in 14 141
 alberta 93 205 alberta_in 114 130
 alberta 98 153 alberta_in 189 89
 alberta 99 221 alberta_in 125 160
-alberta 117 38 alberta_in 180 30
+alberta 117 38 alberta_in 183 26
 alberta 170 170 alb_ship 26 166
 alberta 178 165 alb_ship 41 163
 alberta 209 173 alb_ship 160 171

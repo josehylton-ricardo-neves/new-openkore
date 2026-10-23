@@ -57,7 +57,7 @@ XKore_ID
 
 # It is not advised to set secureAdminPassword if you're using Xkore 2
 secureAdminPassword 1
-adminPassword breasawo
+adminPassword lulugrop
 callSign
 commandPrefix ;
 callSignGM 0
@@ -229,6 +229,7 @@ cartMaxWeight 8000
 itemsTakeGreed 0
 itemsCheckWeight 1
 
+
 lockMap moc_fild13
 lockMap_x
 lockMap_y
@@ -336,7 +337,7 @@ teleportAuto_onlyWhenSafe 0
 teleportAuto_maxDmg 0
 teleportAuto_maxDmgInLock 0
 teleportAuto_deadly 0
-teleportAuto_useSkill 0
+teleportAuto_useSkill 1
 teleportAuto_useChatCommand
 teleportAuto_allPlayers 0
 teleportAuto_notPlayers Curador,MIlIlIlM,LordMatador,BloodSin
@@ -363,7 +364,7 @@ teleportAuto_equip_leftAccessory
 teleportAuto_equip_rightAccessory
 teleportAuto_lostHomunculus
 teleportAuto_useItemForRespawn
-teleportAuto_item1 Infinite Fly Wing
+teleportAuto_item1
 teleportAuto_item2
 
 dealAuto 1
@@ -670,7 +671,7 @@ attackSkillSlot Cart Revolution {
 	dist 1.5
 	maxDist 1.5
 	sp > 11
-	monsters Lobo do Deserto
+	monsters Lobo do Deserto,Creamy
 	stopWhenHit 0
 	inLockOnly 1
 	notInTown 1
@@ -1304,7 +1305,7 @@ storageSellRoutine_goCommand @go einbech
 # 0 desativa aquele gatilho.
 # Limites que disparam a rotina por recurso baixo
 storageSellRoutine_hp 10
-storageSellRoutine_sp 2
+storageSellRoutine_sp 5
 
 # 0 = HP/SP baixo -> @go alberta -> healer -> teleportador
 # 1 = HP/SP baixo -> @go alberta -> storage -> sell -> healer -> teleportador
@@ -1315,8 +1316,8 @@ storageSellRoutine_lowResourceStorage 0
 # itemsMaxWeight_sellOrStore 48
 
 # Pequenos controles internos.
-storageSellRoutine_goSettle 0.2
-storageSellRoutine_queueGrace 0.5
+storageSellRoutine_goSettle 2
+storageSellRoutine_queueGrace 3
 storageSellRoutine_cooldown 3
 
 storageSellRoutine_postServiceTimeout 20
@@ -1337,7 +1338,7 @@ albertaAfterService_cityMap einbech
 #albertaAfterService_healerNpc ayothaya 203 173
 albertaAfterService_healerNpc einbech 183 125
 albertaAfterService_healerTimes 2
-albertaAfterService_healerDelay 0.2
+albertaAfterService_healerDelay 0.5
 
 #albertaAfterService_teleporterNpc alberta 119 64
 #albertaAfterService_teleporterNpc ayothaya 207 169
@@ -1347,7 +1348,7 @@ albertaAfterService_teleporterNpc einbech 192 125
 # r0 = escolhe a PRIMEIRA opcao do menu
 albertaAfterService_teleporterSteps r0
 
-albertaAfterService_npcDistance 15
+albertaAfterService_npcDistance 10
 albertaAfterService_timeout 10
 
 

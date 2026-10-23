@@ -1,0 +1,259 @@
+username: rademadik
+password: shileague11
+
+
+lol
+ricckybelmont2
+ricck230290brujah
+
+
+meubardo
+obardo
+
+minhadancer
+adancer
+
+
+suportador
+suportador
+suportador@hotmail.com
+
+suportador2
+Suportador10#
+suportador2@hotmail.com
+
+
+o-ro
+Ricckybelmont
+Ricck230290
+
+
+
+o-ro
+josehyresbelmont@hotmail.com
+Ze04041988#
+
+JosehyresBelmont
+Ze04041998
+
+
+
+2
+
+ThanatosRO
+angelical
+angelical
+lord_angel@hotmail.com
+
+3,4,5,6,7
+angelical3
+Angelical10#
+lord_angel3@hotmail.com
+lord_angel4@hotmail.com
+lord_angel5@hotmail.com
+lord_angel6@hotmail.com
+lord_angel7@hotmail.com
+
+
+
+
+
+
+
+11
+======priest o-ro========
+angel_of_death_rampage@hotmail.com
+killerangel092032		
+					
+Angelofdeath
+Angel092032
+
+
+[Interface]
+# Key for openkore-bot2
+# Bouncing = 2
+# NAT-PMP (Port Forwarding) = off
+# VPN Accelerator = on
+PrivateKey = gIw0YMjibBZw2MdFkYZE5Q6c/9R7Rb+w5SDgYTysKG8=
+Address = 10.2.0.2/32, 2a07:b944::2:2/128
+DNS = 10.2.0.1, 2a07:b944::2:1
+
+[Peer]
+# US-FREE#20
+PublicKey = DYS0yRzlf5QlioXwjvnmhsee0loEDTcryxkOS7rUjCE=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 37.19.199.134:51820
+
+# Uncomment the following line (delete the # symbol) to connect to Proton VPN using IPv6.
+# Endpoint = [2a02:6ea0:c412:2209::10]:51820
+PersistentKeepalive = 25
+==========================
+
+
+4
+0198
+matador9
+=========rogue o-ro========
+lord_gigante_matador@hotmail.com
+Lord092032
+
+o-RO
+Lordmatador
+Lord092032
+
+ThanatosRO
+matador
+matador
+
+[Interface]
+# Bouncing = 0
+# NAT-PMP (Port Forwarding) = off
+# VPN Accelerator = on
+PrivateKey = CHXnCAqxJmfmSZseZWAj8a4y44ehRl+xvsFjpGI1g3I=
+Address = 10.2.0.2/32, 2a07:b944::2:2/128
+DNS = 10.2.0.1, 2a07:b944::2:1
+
+[Peer]
+# CA-FREE#12
+PublicKey = WajeJDezN7JFBe//v/VMsASFyBUk01Hlyvjb0T+dTjE=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 79.127.254.92:51820
+
+# Uncomment the following line (delete the # symbol) to connect to Proton VPN using IPv6.
+# Endpoint = [2a02:6ea0:510c:3880::10]:51820
+PersistentKeepalive = 25
+==========================
+
+
+
+=========hunter o-ro==========
+mordekaiser_attack@hotmail.com
+Mordekaiser092032
+
+Mordekaiser
+Mordekaiser010101
+
+
+[Interface]
+# Bouncing = 5
+# NAT-PMP (Port Forwarding) = off
+# VPN Accelerator = on
+PrivateKey = 4CsxcMN16VPyJr72W/aDyo3S8iysDw9zZ54ly3nqCl0=
+Address = 10.2.0.2/32
+DNS = 10.2.0.1
+
+[Peer]
+# MX-FREE#2
+PublicKey = GU2c5lP3YlUDXt0S+R2BLJXSbLSO76JtqaF7jZSJzDc=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 103.88.234.229:51820
+
+PersistentKeepalive = 25
+
+==============================
+
+
+
+=====assassin 1 o-ro==========
+creator_blood@hotmail.com
+Blood020202
+
+Blood
+Blood020202
+
+
+singapura VPN
+[Interface]
+# Bouncing = 3
+# NAT-PMP (Port Forwarding) = off
+# VPN Accelerator = on
+PrivateKey = 0GAmx731kJKhrvzJFBHl9Ex2z9QlscxTRTaXwmd0TmU=
+Address = 10.2.0.2/32
+DNS = 10.2.0.1
+
+[Peer]
+# SG-FREE#3
+PublicKey = 9lzYRM9SNjGGkYjc0FcYCWFO9ZWEFRwHboW6RLeUnBU=
+AllowedIPs = 0.0.0.0/0, ::/0
+Endpoint = 149.50.211.139:51820
+
+PersistentKeepalive = 25
+==============================
+
+
+
+======assassin 2 o-ro=========
+ferus_assassin@hotmail.com
+assassim303030
+
+Ferus
+Ferus303030
+
+
+paises baixos VPN
+[Interface]
+# Bouncing = 0
+# NAT-PMP (Port Forwarding) = off
+# VPN Accelerator = on
+PrivateKey = 2AL1L7sSWzAQgs9sVwb/2vq415Y5DuwEWI+AOdGKE2s=
+Address = 10.2.0.2/32
+DNS = 10.2.0.1
+
+[Peer]
+# NL-FREE#284
+PublicKey = WcaWfisZhAMTplFkIHMCjYhGlatiC4aBXR3bMWAP0yc=
+AllowedIPs = 0.0.0.0/0
+Endpoint = 89.105.214.200:51820
+
+PersistentKeepalive = 25
+==============================
+
+
+
+
+
+
+
+
+
+ip.addr == 45.130.137.64 || ip.addr == 139.99.40.25
+
+
+
+
+[FarmlandRO]
+ip 45.130.137.64
+port 6900
+private 1
+pinCode 1
+master_version 1
+version 1
+serverType kRO_RagexeRE_FarmlandRO_2026_08_04
+blockingPlayerCancel 0
+serverEncoding Western
+addTableFolders translated/kRO_english;kRO/pre-re;kRO
+debug 1
+charBlockSize 147
+charDeleteDateType 1
+rankingSystemType 1
+itemListType 1
+pincodeSwitch 0
+ignoreAntiCheatWarning 0
+
+
+
+
+
+
+
+108F-E204
+ultron
+Ultron01!
+6776
+renato_carinhoso123@hotmail.com
+
+
+contador
+Cont123#
+rafael_fragoso.santos@gmail.com
+4587
